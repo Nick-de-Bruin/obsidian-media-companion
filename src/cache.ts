@@ -4,6 +4,7 @@ import type MediaCompanion from "main";
 import { getMediaType, MediaTypes } from "./model/types/mediaTypes";
 import MCImage from "./model/types/image/image";
 import type { FileExplorerLeaf } from "obsidian-typings";
+import Sidecar from "./model/sidecar";
 
 /**
  * Represents a cache for media files
@@ -191,8 +192,8 @@ export default class Cache {
 	public isSidecar(file: TFile): boolean {
 		if (file.extension !== "md") return false;
 
-		// Check if the path ends in ".sidecar.md"
-		if (!file.path.endsWith(".sidecar.md")) return false;
+		// Check if the path ends with the sidecar extension
+		if (!file.path.endsWith(Sidecar.EXTENSION)) return false;
 
 		// Else, get the media file and check if it exists
 		const mediaPath = file.path.substring(0, file.path.length - 11);        

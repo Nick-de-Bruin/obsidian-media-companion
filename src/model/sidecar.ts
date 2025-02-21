@@ -11,6 +11,8 @@ export default class Sidecar {
 	public file!: TFile;
 	protected app!: App;
 
+	public static readonly EXTENSION = ".sidecar.md";
+
 	private constructor() { }
 
 	/**
@@ -50,8 +52,8 @@ export default class Sidecar {
      * @returns The already existing or newly created sidecar file
      */
 	private async createIfNotExists(): Promise<TFile> {
-		const file = this.app.vault.getFileByPath(`${this.mediaFile.path}.sidecar.md`) ?? 
-            await this.app.vault.create(`${this.mediaFile.path}.sidecar.md`, "");
+		const file = this.app.vault.getFileByPath(`${this.mediaFile.path}${Sidecar.EXTENSION}`) ?? 
+            await this.app.vault.create(`${this.mediaFile.path}${Sidecar.EXTENSION}`, "");
         
 		return file;
 	}
