@@ -4,6 +4,7 @@ import type MediaCompanion from "main";
 import { getMediaType, MediaTypes } from "./model/types/mediaTypes";
 import MCImage from "./model/types/image/image";
 import type { FileExplorerLeaf } from "obsidian-typings";
+import Sidecar from "./model/sidecar";
 
 /**
  * Represents a cache for media files
@@ -11,6 +12,10 @@ import type { FileExplorerLeaf } from "obsidian-typings";
 export default class Cache {
 	// The cached files
 	public files: MediaFile[];
+
+	public paths: {[key: string]: number} = {};
+	public tags: {[key: string]: number} = {};
+	public extensions: {[key: string]: number} = {};
 
 	private app: App;
 	private plugin: MediaCompanion;
@@ -80,11 +85,11 @@ export default class Cache {
 
 			switch (getMediaType(file.extension)) {
 				case MediaTypes.Image:
-					mediaFile = await MCImage.create(file, this.app);
+					mediaFile = await MCImage.create(file, this.app, this.plugin);
 					break;
 				case MediaTypes.Unknown:
 				default:
-					mediaFile = await MediaFile.create(file, this.app);
+					mediaFile = await MediaFile.create(file, this.app, this.plugin);
 					break;
 			}
                 
@@ -135,11 +140,11 @@ export default class Cache {
 
 			switch (getMediaType(file.extension)) {
 				case MediaTypes.Image:
-					mediaFile = await MCImage.create(file, this.app);
+					mediaFile = await MCImage.create(file, this.app, this.plugin);
 					break;
 				case MediaTypes.Unknown:
 				default:
-					mediaFile = await MediaFile.create(file, this.app);
+					mediaFile = await MediaFile.create(file, this.app, this.plugin);
 					break;
 			}
                 
@@ -159,6 +164,26 @@ export default class Cache {
      */
 	public addFile(file: MediaFile): void {
 		this.files.push(file);
+
+		// Update paths
+		if (file.file.parent?.path) {
+			for (const path of this.getPathHierarchy(file.file.parent?.path)) {
+				this.addCounter(this.paths, path);
+			}
+		}
+
+		// Update extensions
+		this.addCounter(this.extensions, file.file.extension);
+
+		// Update tags
+		const tags = file.sidecar.getTags();
+		if (tags.length > 0) {
+			for (const tag of tags) {
+				for (const path of this.getPathHierarchy(tag)) {
+					this.addCounter(this.tags, path);
+				}
+			}
+		}
 	}
 
 	/**
@@ -167,11 +192,106 @@ export default class Cache {
      * @returns Whether the operation removed a file or not
      */
 	public removeFile(file: TFile): boolean {
-		const length = this.files.length;
-        
-		this.files = this.files.filter(f => f.file !== file);
+		const mediaFile = this.files.find(f => f.file === file);
 
-		return this.files.length < length;
+		if (mediaFile) {
+			this.files = this.files.filter(f => f.file !== file);
+
+			// Update paths
+			if (mediaFile.file.parent?.path) {
+				for (const path of this.getPathHierarchy(mediaFile.file.parent?.path)) {
+					this.removeCounter(this.paths, path);
+				}
+			}
+
+			// Update extensions
+			this.removeCounter(this.extensions, mediaFile.file.extension);
+
+			// Update tags
+			const tags = mediaFile.sidecar.getTags();
+			if (tags.length > 0) {
+				for (const tag of tags) {
+					for (const path of this.getPathHierarchy(tag)) {
+						this.removeCounter(this.tags, path);
+					}
+				}
+			}
+
+			return true;
+		}
+
+		return false;
+	}
+
+	public fileMoved(file: MediaFile, oldPath: string) {
+		if (file.file.parent?.path) {
+			for (const path of this.getPathHierarchy(file.file.parent?.path)) {
+				this.addCounter(this.paths, path);
+			}
+		}
+
+		for (const path of this.getPathHierarchy(oldPath)) {
+			this.removeCounter(this.paths, path);
+		}
+	}
+
+	public sidecarUpdated(_: MediaFile) {
+		// Rebuild the entire cache for tags
+		this.tags = {};
+
+		for (const mFile of this.files) {
+			for (const tag of mFile.sidecar.getTags()) {
+				for (const path of this.getPathHierarchy(tag)) {
+					this.addCounter(this.tags, path);
+				}
+			}
+		}
+	}
+
+	private addCounter(counter: {[key: string]: number}, value: string) {
+		if (counter[value]) {
+			counter[value] += 1;
+		} else {
+			counter[value] = 1;
+		}
+	}
+
+	private removeCounter(counter: {[key: string]: number}, value: string) {
+		if (counter[value]) {
+			counter[value] -= 1;
+
+			if (this.extensions[value] == 0) {
+				delete this.extensions[value];
+			}
+		}
+	}
+
+	/**
+	 * Returns all parent paths for a given path, from root to full path
+	 * @param path The file path to process
+	 * @returns Array of path strings, from root to full path
+	 */
+	private getPathHierarchy(path: string): string[] {
+		if (!path) return [''];
+	
+		const segments = path.split('/');
+		const paths: string[] = [];
+	
+		// Start with root
+		let currentPath = '';
+	
+		// Build each level of the path
+		for (let i = 0; i < segments.length; i++) {
+			if (currentPath && segments[i]) {
+				currentPath += '/';
+			}
+			currentPath += segments[i];
+			if (currentPath) {
+				paths.push(currentPath);
+			}
+		}
+	
+		return paths;
 	}
 
 	/**
@@ -191,8 +311,8 @@ export default class Cache {
 	public isSidecar(file: TFile): boolean {
 		if (file.extension !== "md") return false;
 
-		// Check if the path ends in ".sidecar.md"
-		if (!file.path.endsWith(".sidecar.md")) return false;
+		// Check if the path ends with the sidecar extension
+		if (!file.path.endsWith(Sidecar.EXTENSION)) return false;
 
 		// Else, get the media file and check if it exists
 		const mediaPath = file.path.substring(0, file.path.length - 11);        

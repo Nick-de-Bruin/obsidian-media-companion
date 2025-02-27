@@ -11,9 +11,12 @@
     import imagesLoaded from "imagesloaded";
 	import activeStore from "src/stores/activeStore";
 	import type { Shape } from "src/model/types/shape";
-	import SuggestInput from "./SuggestInput.svelte";
 	import MediaFileEmbed from "./MediaFileEmbed.svelte"
 	import { debounce } from "obsidian";
+	import IncludeSelect from "./search/IncludeSelect.svelte";
+	import ColourPicker from "./search/ColourPicker.svelte";
+	import Resolution from "./search/Resolution.svelte";
+	import Order from "./search/Order.svelte";
 
     let plugin: MediaCompanion = get(pluginStore.plugin);
     let app: App = get(appStore.app);
@@ -23,48 +26,37 @@
         file: MediaFile;
     }
 
-    let elementSize: number = 200;
+	let possiblePaths: [string, number][] = [];
+	let includedPaths: string[] = [];
+	let excludedPaths: string[] = [];
+	let possibleTags: [string, number][] = [];
+	let includedTags: string[] = [];
+	let excludedTags: string[] = [];
+	let possibleExtensions: [string, number][] = [];
+	let includedExtensions: string[] = [];
+	let excludedExtensions: string[] = [];
+	let color: string | null = null;
+	let shape: Shape | null = null;
+	let minX: number | null = null;
+	let maxX: number | null = null;
+	let minY: number | null = null;
+	let maxY: number | null = null;
 
-    let searchDebounce = debounce(async () => {
-            items = [];
-            currentGroup = 0;
-            query = new Query(plugin.cache, {
-                color: searchColor,
-                folders: searchFolders,
-                name: "",
-                tags: searchTags.map(tag => tag.startsWith('#') ? tag.slice(1) : tag),
-                fileTypes: searchFileTypes,
-                shape: searchShapes,
-                dimensions: null, 
-                orderBy: {
-                    option: orderBy,
-                    value: ""
-                },
-                orderIncreasing: orderIncreasing,
-                hasFrontMatter: []
-            });
-            allItems = await query.getItems();
-            await loadNextGroup();
-			reloadMasonry();
-		}, 300, true);
-    let searchColor: string = "";
-    let searchFolders: string[] = [];
-    let searchTags: string[] = [];
-    let searchFileTypes: string[] = [];
-    let searchShapes: Shape[] = [];
+	let elementSize: number = 200;
+	let minElementSize: number = 100;
+	let maxElementSize: number = 500;
     let orderBy: OrderByOptions = OrderByOptions.name;
     let orderIncreasing: boolean = true;
-
-	let isCollapsed: boolean = true;
 
     let masonry: Masonry;
     let masonryContainer: HTMLDivElement;
     let scrollContainer: HTMLElement;
-	let collapseButton: HTMLElement;
-	let sortOrderButton: HTMLElement;
     let items: DisplayItem[] = [];
     let allItems: MediaFile[] = [];
     let query: Query = new Query(plugin.cache);
+
+	let sizerMinus: HTMLDivElement;
+	let sizerPlus: HTMLDivElement;
 
     let isLoading: boolean = false;
     let currentGroup: number = 0;
@@ -83,19 +75,6 @@
     // @ts-ignore
     plugin.mutationHandler.addEventListener("sidecar-edited", onFileChanged);
 
-	function setCollapseArrow() {
-		if (isCollapsed) {
-			setIcon(collapseButton, "arrow-big-down");
-		} else {
-			setIcon(collapseButton, "arrow-big-up");
-		}
-	}
-
-	function toggleCollapse() {
-		isCollapsed = !isCollapsed;
-		setCollapseArrow();
-	}
-
     function getDisplayItem(file: MediaFile): DisplayItem {
         return {
             uri: app.vault.getResourcePath(file.file),
@@ -107,6 +86,8 @@
 	// on the query parameters. Will remove and/or add the file where needed, and reload
 	// the masonry
     function onFileMoved(e: { detail: {file: MediaFile, oldPath: string} }) {
+		updateSearchPossibilities();
+
         let allFilesIndex = allItems.findIndex((item) => item.file.path === e.detail.oldPath);
         let itemsIndex = items.findIndex((item) => item.file.file.path === e.detail.oldPath);
 
@@ -138,6 +119,8 @@
     }
 
     function onNewFile(e: { detail: MediaFile }) {
+		updateSearchPossibilities();
+
         // Check if the mediaFile is already in allItems or should be added
         if (query) {
             query.testFile(e.detail).then((res) => {
@@ -152,6 +135,8 @@
 
 	// Removes the file if it's in our current list and then reloads the masonry
     function onFileRemoved(e: { detail: MediaFile }) {
+		updateSearchPossibilities();
+
         allItems = allItems.filter((item) => item !== e.detail);
         items = items.filter((item) => item.file !== e.detail);
         items = [...items];
@@ -161,6 +146,8 @@
 	// Same as onFileMoved; Checks the new file according to the query and removes/adds it
 	// as needed
     function onFileChanged(e: { detail: MediaFile }) {
+		updateSearchPossibilities();
+
         let allFilesIndex = allItems.findIndex((item) => item === e.detail);
         let itemsIndex = items.findIndex((item) => item.file === e.detail);
 
@@ -260,11 +247,58 @@
         return scrollContainer.scrollHeight > scrollContainer.clientHeight && scrollContainer.clientHeight != 0;
     }
 
+	function updateSearchPossibilities() {
+		possiblePaths = [...Object.entries(plugin.cache.paths)];
+		possiblePaths.sort((a, b) => a[0].localeCompare(b[0]));
+		possibleTags = [...Object.entries(plugin.cache.tags)];
+		possibleTags.sort((a, b) => a[0].localeCompare(b[0]));
+		possibleExtensions = [...Object.entries(plugin.cache.extensions)];
+		possibleExtensions.sort((a, b) => a[0].localeCompare(b[0]));
+	}
+
+	let pinchInitialDistance = 0;
+	let pinchInitialSize = 0;
+
+	function getTouchDistance(e: TouchEvent) {
+		const dx = e.touches[0].clientX - e.touches[1].clientX;
+		const dy = e.touches[0].clientY - e.touches[1].clientY;
+		return Math.sqrt(dx * dx + dy * dy);
+	}
+
+	function onTouchStart(e: TouchEvent) {
+		if (e.touches.length === 2) {
+			pinchInitialDistance = getTouchDistance(e);
+			pinchInitialSize = elementSize;
+			e.preventDefault();
+		}
+	}
+
+	function onTouchMove(e: TouchEvent) {
+		if (e.touches.length === 2) {
+			const currentDistance = getTouchDistance(e);
+
+			if (pinchInitialDistance > 0) {
+				const scale = currentDistance / pinchInitialDistance;
+				elementSize = Math.min(maxElementSize, Math.max(minElementSize, Math.round(pinchInitialSize * scale)));
+
+				reloadMasonry();
+				e.preventDefault();
+			}
+		}
+	}
+
+	function onTouchEnd() {
+		pinchInitialDistance = 0;
+	}
+
     onMount(async () => {
         await plugin.cache.initialize();
-		setCollapseArrow();
-		setIcon(sortOrderButton, "arrow-down-up");
         allItems = await query.getItems();
+
+		setIcon(sizerMinus, "minus");
+		setIcon(sizerPlus, "plus"); 
+
+		updateSearchPossibilities();
 
         masonry = new Masonry(masonryContainer, {
             transitionDuration: 0, // Turn off animations; Looks weird when adding items
@@ -278,10 +312,18 @@
         resizeObserver.observe(scrollContainer);
 
         scrollContainer.addEventListener("scroll", onScroll);
+		scrollContainer.addEventListener("touchstart", onTouchStart, { passive: false });
+    	scrollContainer.addEventListener("touchmove", onTouchMove, { passive: false });
+    	scrollContainer.addEventListener("touchend", onTouchEnd);
     });
 
     onDestroy(() => {
         scrollContainer.removeEventListener("scroll", onScroll);
+		scrollContainer.removeEventListener("touchstart", onTouchStart);
+	    scrollContainer.removeEventListener("touchmove", onTouchMove);
+    	scrollContainer.removeEventListener("touchend", onTouchEnd);
+
+
         if (resizeObserver) {
             resizeObserver.disconnect();
         }
@@ -302,52 +344,95 @@
         activeStore.file.set(file);
     }
 
+	let searchDebounce = debounce(async () => {
+        items = [];
+        currentGroup = 0;
+
+        query = new Query(plugin.cache, {
+			name: "",
+            folders: {
+				included: includedPaths,
+				excluded: excludedPaths
+			},
+            tags: {
+				included: includedTags,
+				excluded: excludedTags,
+			},
+            fileTypes: {
+				included: includedExtensions,
+				excluded: excludedExtensions,
+			},
+            shape: shape,
+			color: color,
+            dimensions: {
+				minWidth: minX,
+				maxWidth: maxX,
+				minHeight: minY,
+				maxHeight: maxY
+			}, 
+            orderBy: orderBy,
+            orderIncreasing: orderIncreasing,
+        });
+        allItems = await query.getItems();
+        await loadNextGroup();
+		reloadMasonry();
+	}, 300, true);
+
     function onSearchChange() {
         searchDebounce();
     }
+
 </script>
 
 <div class="MC-gallery-view-container">
 {#await plugin.cache.initialize()}
     <h1 class="MC-gallery-loading">Loading cache...</h1>
 {:then}
-<div class="MC-gallery-search MC-collapsible" class:MC-collapsed={isCollapsed}>
-	<SuggestInput 
-		selected={searchFolders}
-		autoComplete={() => app.vault.getAllFolders().map(folder => folder.path)} 
-		labelText={"Folders"} 
-		onChange={onSearchChange}
-		/>
-	<SuggestInput
-		selected={searchTags}
-		autoComplete={() => Object.keys(app.metadataCache.getTags())}
-		labelText={"Tags"}
-		onChange={onSearchChange}
-		/>
-	<SuggestInput
-		selected={searchFileTypes}
-		autoComplete={() => plugin.settings.extensions}
-		labelText={"File types"}
-		onChange={onSearchChange}
-		/>
-</div>
-<div class="MC-gallery-properties">
-	<div class="MC-left-section">
-		<input type="color" name="Color" class="MC-color-picker" bind:value={searchColor} on:input={onSearchChange}>
-		<button on:click={()=>{searchColor = ""; onSearchChange()}} class="MC-clear-btn">&times;</button>
-	</div>
-	<div class="MC-center-section">
-		- <input type="range" bind:value={elementSize} min="100" max="500" on:input={() => reloadMasonry()}> +
-	</div>
-	<div class="MC-right-section">
-		<label for="orderBy" class="MC-sort-label">Sort by:</label>
-		<select bind:value={orderBy} on:change={onSearchChange}>
-			{#each Object.values(OrderByOptions) as option}
-				<option value={option}>{option.replace(/([A-Z])/g, ' $1').toLowerCase().replace(/^./, str => str.toUpperCase())}</option>
-			{/each}
-		</select>
-		<button class="MC-sort-toggle" on:click={() => { onSearchChange(); orderIncreasing = !orderIncreasing; }} bind:this={sortOrderButton}></button>
-		<button on:click={toggleCollapse} bind:this={collapseButton} class="MC-collapse-button"></button>
+<div class="MC-search-controls-scroll-wrapper">
+	<div class="MC-search-controls-container">
+		<div class="MC-gallery-search">
+			<ColourPicker
+				bind:color={color}
+				updated={onSearchChange}/>
+			<IncludeSelect 
+				options={possiblePaths} 
+				bind:included={includedPaths} 
+				bind:excluded={excludedPaths}
+				icon="folder"
+				text="Paths"
+				updated={onSearchChange} />
+			<IncludeSelect 
+				options={possibleTags} 
+				bind:included={includedTags} 
+				bind:excluded={excludedTags}
+				icon="hash"
+				text="Tags"
+				updated={onSearchChange} />
+			<IncludeSelect 
+				options={possibleExtensions} 
+				bind:included={includedExtensions} 
+				bind:excluded={excludedExtensions}
+				icon="file-question"
+				text="Extension"
+				updated={onSearchChange} />
+			<Resolution 
+				bind:shape={shape}
+				bind:minX={minX}
+				bind:maxX={maxX}
+				bind:minY={minY}
+				bind:maxY={maxY}
+				updated={onSearchChange}/>
+		</div>
+		<div class="MC-gallery-controls-right">
+			<div class="MC-gallery-sizer-icon" bind:this={sizerMinus}><span></span></div> 
+			<input class="MC-gallery-sizer" type="range" bind:value={elementSize} min={minElementSize} max={maxElementSize} on:input={() => reloadMasonry()}>
+			<div class="MC-gallery-sizer-icon" bind:this={sizerPlus}><span></span></div>
+			<div class="MC-gallery-empty"></div>
+			<Order
+				bind:option={orderBy}
+				bind:orderIncreasing={orderIncreasing}
+				updated={onSearchChange} />
+		</div>
 	</div>
 </div>
 <hr class="MC-gallery-search-hr">
@@ -369,85 +454,6 @@
 		padding: 5px;
 	}
 
-	:global(input[type="color"].MC-color-picker) {
-		box-shadow: inset 0 0 0 10px var(--interactive-accent);
-		border-radius: 1em;
-	}
-
-	:global(.MC-gallery-properties) {
-    	display: flex;
-		flex-flow: row wrap;
-    	justify-content: space-between;
-    	align-items: center;
-    	width: 100%;
-		max-width: 100%;
-		padding: 5px;
-	}
-
-	:global(.MC-left-section) {
-	    display: flex;
-	    align-items: center;
-	}
-
-	:global(.MC-left-section input[type="color"]) {
-	    margin-right: 8px;
-	    vertical-align: middle;
-	}
-
-    :global(.MC-center-section) {
-        display: flex;
-        align-items: center;
-    }
-
-	:global(.MC-gallery-properties .MC-clear-btn) {
-	    background: none;
-	    border: none;
-	    font-size: 16px;
-	    padding: 0;
-	    cursor: pointer;
-		box-shadow: none;
-	}
-
-	:global(.MC-right-section) {
-	    display: flex;
-	    align-items: center;
-	}
-
-	:global(.MC-right-section > *) {
-	    margin-right: 10px;
-	}
-
-	:global(.MC-sort-toggle) {
-	    cursor: pointer;
-	}
-
-	:global(.MC-sort-toggle i) {
-	    font-size: 16px;
-	}
-
-	:global(.MC-sort-toggle .up::before) {
-	    content: "↑";
-	}
-
-	:global(.MC-sort-toggle .down::before) {
-	    content: "↓";
-	}
-
-	:global(.MC-collapsible) {
-		transition: all 1s ease
-	}
-
-	:global(.MC-collapsed) {
-		height: 1px;
-		overflow: hidden; 
-	}
-
-    :global(.MC-gallery-view-container) {
-        display: flex;
-        flex-direction: column;
-        height: 100%;
-    }
-
     :global(.MC-gallery-masonry) {
         display: block;
         width: 100%;
@@ -455,6 +461,44 @@
 
     :global(.MC-gallery-search-hr) {
         margin: 4px;
+    }
+
+	:global(.MC-search-controls-container) {
+		display: flex;
+		justify-content: space-between;
+		flex-wrap: wrap;
+		flex-shrink: 0;
+	}
+
+	:global(.MC-gallery-controls-right) {
+		margin-left: auto;
+		display: flex;
+		align-items: center;
+		gap: 5px;
+		padding: 0 10px;
+	}
+
+	:global(.MC-gallery-search) {
+		display: flex;
+		align-items: stretch;
+		flex-wrap: wrap;
+		gap: 5px;
+		padding: 0 10px;
+	}
+
+	:global(.MC-gallery-empty) {
+		padding: 5px;
+	}
+
+	:global(.MC-gallery-controls-right .MC-gallery-sizer-icon) {
+		display: flex;
+		align-items: center;
+	}
+
+	:global(.MC-gallery-view-container) {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
     }
 
     :global(.MC-gallery-loading) {
@@ -466,7 +510,7 @@
         display: flex;
 		width: 100%;
         justify-content: center;
-        overflow: scroll;
+        overflow-y: scroll;
         flex-grow: 1;
 		padding: 0 !important;
     }
@@ -487,4 +531,8 @@
 		border-radius: 2px;
     }
 
+	/* Used in gallery-view.ts */
+	:global(.MC-gallery-page-container) {
+		padding-bottom: 0 !important;
+	}
 </style>

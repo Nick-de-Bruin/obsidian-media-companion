@@ -4,6 +4,7 @@ import MediaFile from "./model/mediaFile";
 import type Cache from "./cache";
 import { getMediaType, MediaTypes } from "./model/types/mediaTypes";
 import MCImage from "./model/types/image/image";
+import Sidecar from "./model/sidecar";
 
 /**
  * Handles mutations in the vault
@@ -40,9 +41,9 @@ export default class MutationHandler extends EventTarget {
 
 		let mediaPath = file.path;
 
-		if (isMarkdown && !file.path.endsWith(".sidecar.md")) return;
+		if (isMarkdown && !file.path.endsWith(Sidecar.EXTENSION)) return;
 		if (isMarkdown) {
-			mediaPath = file.path.substring(0, file.path.length - 11);
+			mediaPath = file.path.substring(0, file.path.length - Sidecar.EXTENSION.length);
 		}
 
 		const f = this.cache.getFile(mediaPath);
@@ -50,6 +51,7 @@ export default class MutationHandler extends EventTarget {
 		if (f) {
 			f.update().then(() => {});
 			if (isMarkdown) {
+				this.cache.sidecarUpdated(f);
 				this.dispatchEvent(new CustomEvent("sidecar-edited", { detail: f }));
 			} else {
 				this.dispatchEvent(new CustomEvent("file-edited", { detail: f }));
@@ -79,15 +81,14 @@ export default class MutationHandler extends EventTarget {
 
 		// get the file
 		const f = this.cache.getFile(file.path);
+		this.cache.removeFile(file);
         
 		if (f) {
 			this.dispatchEvent(new CustomEvent("file-deleted", { detail: f }));
 		}
-
-		this.cache.removeFile(file);
         
 		// Get sidecar file and remove it
-		const sidecar = this.app.vault.getFileByPath(`${file.path}.sidecar.md`);
+		const sidecar = this.app.vault.getFileByPath(`${file.path}${Sidecar.EXTENSION}`);
 		if (sidecar) {
 			this.app.fileManager.trashFile(sidecar).then(() => {});
 		}
@@ -117,15 +118,16 @@ export default class MutationHandler extends EventTarget {
 		if (!this.plugin.settings.extensions.contains(file.extension.toLowerCase())) return;
 
 		const cacheFile = this.cache.getFile(file.path);
-		const sidecar = this.app.vault.getFileByPath(`${oldpath}.sidecar.md`);
+		const sidecar = this.app.vault.getFileByPath(`${oldpath}${Sidecar.EXTENSION}`);
 
 		if (sidecar) {
-			this.app.fileManager.renameFile(sidecar, `${file.path}.sidecar.md`).then(() => {});
+			this.app.fileManager.renameFile(sidecar, `${file.path}${Sidecar.EXTENSION}`).then(() => {});
 		}
 
 		if (!cacheFile) {
 			this.createMediaFile(file, sidecar).then((mediaFile) => {
 				if (mediaFile) {
+					this.cache.fileMoved(mediaFile, oldpath);
 					this.dispatchEvent(new CustomEvent("file-moved", { detail: {file: mediaFile, oldPath: oldpath} }));
 				}
 			});
@@ -161,10 +163,10 @@ export default class MutationHandler extends EventTarget {
 
 		switch (getMediaType(file.extension)) {
 			case MediaTypes.Image:
-				mediaFile = await MCImage.create(file, this.app, sidecar);
+				mediaFile = await MCImage.create(file, this.app, this.plugin, sidecar);
 				break;
 			case MediaTypes.Unknown:
-				mediaFile = await MediaFile.create(file, this.app, sidecar);
+				mediaFile = await MediaFile.create(file, this.app, this.plugin, sidecar);
 				break;
 		}
 

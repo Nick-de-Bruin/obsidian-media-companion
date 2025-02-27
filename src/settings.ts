@@ -1,6 +1,7 @@
 export interface MediaCompanionSettings {
 	hideSidecar: boolean;
 	extensions: string[];
+	sidecarTemplate: string;
 }
 
 export const DEFAULT_SETTINGS: MediaCompanionSettings = {
@@ -14,4 +15,5 @@ export const DEFAULT_SETTINGS: MediaCompanionSettings = {
 		'webp',
 		'gif',
 	],
+	sidecarTemplate: "",
 }

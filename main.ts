@@ -161,5 +161,16 @@ class MediaCompanionSettingTab extends PluginSettingTab {
 				.onChange(async (value) => {
 					extensionDebounce(value);
 				}));
+
+		new Setting(containerEl)
+			.setName('Sidecar template')
+			.setDesc('The template to be used for new sidecar files.')
+			.addTextArea(text => text
+				.setPlaceholder('Sidecar template')
+				.setValue(this.plugin.settings.sidecarTemplate)
+				.onChange(async (value) => {
+					this.plugin.settings.sidecarTemplate = value;
+					await this.plugin.saveSettings();
+				}));
 	}
 }

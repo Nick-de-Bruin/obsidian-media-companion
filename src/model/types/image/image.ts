@@ -1,6 +1,7 @@
 import MediaFile from "src/model/mediaFile";
 import type { App, TFile } from "obsidian";
 import { extractColors } from "extract-colors";
+import type MediaCompanion from "main";
 
 export default class MCImage extends MediaFile {
 	// The reserved tags for this type
@@ -18,10 +19,10 @@ export default class MCImage extends MediaFile {
 	 * @param sidecar The sidecar file, if it already exists
      * @returns The created MCImage
      */
-	public static async create(file: TFile, app: App, sidecar: TFile | null = null): Promise<MCImage> {
+	public static async create(file: TFile, app: App, plugin: MediaCompanion, sidecar: TFile | null = null): Promise<MCImage> {
 		const f = new MCImage();
 
-		await MCImage.fill(f, file, app, sidecar)
+		await MCImage.fill(f, file, app, plugin, sidecar)
 
 		return f;
 	}
@@ -33,8 +34,8 @@ export default class MCImage extends MediaFile {
      * @param app The app instance
 	 * @param sidecar The sidecar file, if it already exists
      */
-	protected static async fill(f: MCImage, file: TFile, app: App, sidecar: TFile | null = null) {
-		await super.fill(f, file, app, sidecar);
+	protected static async fill(f: MCImage, file: TFile, app: App, plugin: MediaCompanion, sidecar: TFile | null = null) {
+		await super.fill(f, file, app, plugin, sidecar);
 	}
 
 	/**

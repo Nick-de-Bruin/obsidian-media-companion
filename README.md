@@ -39,7 +39,3 @@ More complex searching can also be done, like searching by color (**without** us
 If you wish to contribute to the plugin, feel free to open a pull-request or an issue.
 If you're thinking about implementing a large feature, please open an issue first or contact me on discord at `n_1ck` 
 so we can figure out if it's a good fit for this plugin.
-
-# Attribution
-
-Original SuggestInput adapted from https://github.com/agustinl/MC-input, available under the MIT license.

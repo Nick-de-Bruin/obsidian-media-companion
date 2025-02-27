@@ -1,11 +1,13 @@
 import { TFile, type App } from "obsidian";
 import Sidecar from "./sidecar";
 import { getMediaType, type MediaTypes } from "./types/mediaTypes";
+import type MediaCompanion from "main";
 
 export default class MediaFile {
 	public sidecar!: Sidecar;
 	public file!: TFile;
 	protected app!: App;
+	protected plugin!: MediaCompanion;
 
 	public static last_updated_tag = "MC-last-updated";
     
@@ -18,10 +20,10 @@ export default class MediaFile {
 	 * @param sidecar The sidecar for the file, in case it already exists
      * @returns The created MediaFile
      */
-	public static async create(file: TFile, app: App, sidecar: TFile | null = null): Promise<MediaFile> {
+	public static async create(file: TFile, app: App, plugin: MediaCompanion, sidecar: TFile | null = null): Promise<MediaFile> {
 		const f = new MediaFile();
 
-		await MediaFile.fill(f, file, app, sidecar);
+		await MediaFile.fill(f, file, app, plugin, sidecar);
 
 		return f;
 	}
@@ -33,11 +35,12 @@ export default class MediaFile {
      * @param app The app instance
 	 * @param sidecar The sidecar for the file, in case it already exists
      */
-	protected static async fill(f: MediaFile, file: TFile, app: App, sidecar: TFile | null = null): Promise<void> {
+	protected static async fill(f: MediaFile, file: TFile, app: App, plugin: MediaCompanion, sidecar: TFile | null = null): Promise<void> {
 		f.file = file;
 		f.app = app;
+		f.plugin = plugin;
 
-		f.sidecar = await Sidecar.create(file, app, sidecar);
+		f.sidecar = await Sidecar.create(file, app, plugin, sidecar);
 
 		await f.update();
 	}

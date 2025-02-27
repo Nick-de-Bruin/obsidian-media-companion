@@ -26,6 +26,7 @@ export class GalleryView extends ItemView {
 	}
 
 	public async onOpen() {
+		this.contentEl.addClass("MC-gallery-page-container");
 		this.component = new Gallery({
 			target: this.contentEl,
 			props: { }

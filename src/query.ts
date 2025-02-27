@@ -20,24 +20,29 @@ export enum OrderByOptions {
  * A query of media files
  */
 export type QueryDetails = {
-	color: null | HexString, // null | HexString
-	folders: string[], // string[], if length == 0, all folders (formatted 'path/to/folder')
 	name: string, // string, if empty, all names
-	tags: string[], // string[], if length == 0, all tags (formatted 'abc')
-	fileTypes: string[], // string[], if length == 0, all file types (formatted 'png')
-	shape: Shape[], // shapes[], if length == 0, all shapes
-	dimensions: {
-		mindWidth: number,
-		maxWidth: number,
-		minHeight: number, // 0 if empty
-		maxHeight: number, // Should be set to infinity if empty
-	} | null,
-	orderBy: {
-		option: OrderByOptions,
-		value: string // value for custom frontmatter
+	folders: {
+		included: string[],
+		excluded: string[],
 	},
+	tags: {
+		included: string[],
+		excluded: string[],
+	},
+	fileTypes: {
+		included: string[],
+		excluded: string[],
+	},
+	color: HexString | null,
+	shape: Shape | null,
+	dimensions: {
+		minWidth: number | null,
+		maxWidth: number | null,
+		minHeight: number | null, 
+		maxHeight: number | null,
+	},
+	orderBy: OrderByOptions,
 	orderIncreasing: boolean,
-	hasFrontMatter: string[], // list of frontMatter tags that should exist
 }
 
 /**
@@ -50,20 +55,35 @@ export default class Query {
 	private currentIndex: number;
 	private totalFound: number;
 	public static readonly defaultQuery: QueryDetails = {
-		color: null,
-		folders: [],
 		name: "",
-		tags: [],
-		fileTypes: [],
-		shape: [],
-		dimensions: null,
-		orderBy: {
-			option: OrderByOptions.name,
-			value: ""
+		folders: {
+			included: [],
+			excluded: [],
 		},
+		tags: {
+			included: [],
+			excluded: [],
+		},
+		fileTypes: {
+			included: [],
+			excluded: []
+		},
+		color: null,
+		shape: null,
+		dimensions: {
+			minWidth: null,
+			maxWidth: null,
+			minHeight: null,
+			maxHeight: null, 
+		},
+		orderBy: OrderByOptions.name,
 		orderIncreasing: true,
-		hasFrontMatter: []
 	}
+
+	private sortedFolders: [string, boolean][];
+	private sortedTags: [string, boolean][];
+	private anyFolderInclude: boolean;
+	private anyTagInclude: boolean;
 
 	public constructor(cache: Cache, query: QueryDetails = Query.defaultQuery) {
 		this.cache = cache;
@@ -71,6 +91,23 @@ export default class Query {
 		this.currentIndex = -1;
 		this.totalFound = 0;
 		this.files = [];
+
+		this.anyFolderInclude = this.query.folders.included.length > 0;
+		this.anyTagInclude = this.query.tags.included.length > 0;
+		
+		this.sortedFolders = [
+			...this.query.folders.included.map(folder => [folder, true] as [string, boolean]),
+			...this.query.folders.excluded.map(folder => [folder, false] as [string, boolean])
+		];
+
+		this.sortedFolders.sort((a, b) => b[0].length - a[0].length);
+
+		this.sortedTags = [
+			...this.query.tags.included.map(tags => [tags, true] as [string, boolean]),
+			...this.query.tags.excluded.map(tags => [tags, false] as [string, boolean])
+		]
+
+		this.sortedTags.sort((a, b) => b[0].length - a[0].length);
 	}
 
 	/**
@@ -78,7 +115,7 @@ export default class Query {
 	 * OrderByOptions field in the QueryDetails
 	 */
 	public orderFiles() {
-		switch (this.query.orderBy.option) {
+		switch (this.query.orderBy) {
 			case OrderByOptions.creationDate:
 				this.files.sort((a, b) => a.file.stat.ctime - b.file.stat.ctime);
 				break;
@@ -112,23 +149,23 @@ export default class Query {
 			if (!mediaTypes.includes(item.getType())) return false;
 		}
 
-		if (this.query.fileTypes.length > 0) {
-			if (!this.query.fileTypes.contains(item.file.extension)) return false;
-		}
+		if (this.query.fileTypes.included.length > 0 && !this.query.fileTypes.included.contains(item.file.extension)) return false;
+		if (this.query.fileTypes.excluded.contains(item.file.extension)) return false;
 
 		if (mediaTypes.contains(MediaTypes.Image))
 		{
 			const image = item as MCImage;
 			const size = await image.getCachedSize();
 
-			if (this.query.dimensions) {
-				if (!(size) ||
-                    size.width < this.query.dimensions.mindWidth || size.width > this.query.dimensions.maxWidth ||
-                    size.height < this.query.dimensions.minHeight || size.height > this.query.dimensions.maxHeight) return false;
-			}
+			if (size) {
+				if (this.query.dimensions.minWidth && size.width < this.query.dimensions.minWidth) return false;
+				if (this.query.dimensions.maxWidth && size.width > this.query.dimensions.maxWidth) return false;
+				if (this.query.dimensions.minHeight && size.height < this.query.dimensions.minHeight) return false;
+				if (this.query.dimensions.maxHeight && size.height > this.query.dimensions.maxHeight) return false;
 
-			if (this.query.shape.length > 0) {
-				if (!(size) || !this.query.shape.contains(getShape(size.width, size.height))) return false;
+				if (this.query.shape) {
+					if (this.query.shape !== getShape(size.width, size.height)) return false;
+				}
 			}
 
 			if (this.query.color) {
@@ -197,46 +234,31 @@ export default class Query {
 		}
 
 		// Folders...
-		if (this.query.folders.length > 0) {
-			let hit = false;
-
-			for (const folder of this.query.folders) {
-				if (item.file.path.startsWith(folder)) {
-					hit = true;
-					break;
-				}
+		let foundIncludeFolder = false;
+		for (const [folder, include] of this.sortedFolders) {
+			if (item.file.path.startsWith(folder)) {
+				if (!include) return false;
+				else foundIncludeFolder = true;
+				break;
 			}
-
-			if (!hit) return false;
 		}
+
+		if (this.anyFolderInclude && !foundIncludeFolder) return false;
 
 		// Tags...
-		if (this.query.tags.length > 0) {
-			let hit = false;
+		let foundIncludeTag = false;
 
-			for (const tag of this.query.tags) {
-				if (item.sidecar.getTags().contains(tag.toLocaleLowerCase())) {
-					hit = true;
-					break;
+		tagsLoop: for (const mTag of item.sidecar.getTags()) {
+			for (const [tag, include] of this.sortedTags) {
+				if (mTag.startsWith(tag)) {
+					if (!include) return false;
+					else foundIncludeTag = true;
+					continue tagsLoop;
 				}
 			}
-
-			if (!hit) return false;
 		}
 
-		// Frontmatter...
-		if (this.query.hasFrontMatter.length > 0) {
-			let hit = false;
-
-			for (const fm of this.query.hasFrontMatter) {
-				if (item.sidecar.getFrontmatterTag(fm)) {
-					hit = true;
-					break;
-				}
-			}
-
-			if (!hit) return false;
-		}
+		if (this.anyTagInclude && !foundIncludeTag) return false;
 
 		return true;
 	}
@@ -276,12 +298,12 @@ export default class Query {
 	 */
 	private determineTypes(): MediaTypes[] {
 		if ((this.query.dimensions 
-                && this.query.dimensions.maxHeight !== Infinity
-                && this.query.dimensions.maxWidth !== Infinity 
-                && this.query.dimensions.minHeight !== 0
-                && this.query.dimensions.mindWidth !== 0) 
-            || this.query.shape.length > 0 
-            || this.query.color) {
+                && (this.query.dimensions.maxHeight !== null
+                || this.query.dimensions.maxWidth !== null 
+                || this.query.dimensions.minHeight !== null
+                || this.query.dimensions.minWidth !== null))
+            || this.query.shape !== null
+            || this.query.color !== null) {
 			// May in the future also be video
 			return [MediaTypes.Image];
 		}
