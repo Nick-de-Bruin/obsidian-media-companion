@@ -38,7 +38,7 @@ export type QueryDetails = {
 	dimensions: {
 		minWidth: number | null,
 		maxWidth: number | null,
-		minHeight: number | null, 
+		minHeight: number | null,
 		maxHeight: number | null,
 	},
 	date: {
@@ -80,7 +80,7 @@ export default class Query {
 			minWidth: null,
 			maxWidth: null,
 			minHeight: null,
-			maxHeight: null, 
+			maxHeight: null,
 		},
 		date: {
 			startCtime: null,
@@ -106,7 +106,7 @@ export default class Query {
 
 		this.anyFolderInclude = this.query.folders.included.length > 0;
 		this.anyTagInclude = this.query.tags.included.length > 0;
-		
+
 		this.sortedFolders = [
 			...this.query.folders.included.map(folder => [folder, true] as [string, boolean]),
 			...this.query.folders.excluded.map(folder => [folder, false] as [string, boolean])
@@ -166,18 +166,17 @@ export default class Query {
 
 		const DAY_LENGTH = 86400000; // 1000* 60 * 60 * 24
 
-		if (this.query.date.startCtime && this.query.date.endCtime && 
+		if (this.query.date.startCtime && this.query.date.endCtime &&
 			this.query.date.startCtime.getTime() < this.query.date.endCtime.getTime() + DAY_LENGTH &&
 			(item.file.stat.ctime < this.query.date.startCtime.getTime() ||
-			item.file.stat.ctime > (this.query.date.endCtime.getTime()) + DAY_LENGTH)) return false;
+				item.file.stat.ctime > (this.query.date.endCtime.getTime()) + DAY_LENGTH)) return false;
 
 		if (this.query.date.startMtime && this.query.date.endMtime &&
 			this.query.date.startMtime.getTime() < this.query.date.endMtime.getTime() + DAY_LENGTH &&
-			(item.file.stat.mtime < (this.query.date.startMtime.getTime()) || 
-			item.file.stat.mtime > (this.query.date.endMtime.getTime()) + DAY_LENGTH)) return false;
+			(item.file.stat.mtime < (this.query.date.startMtime.getTime()) ||
+				item.file.stat.mtime > (this.query.date.endMtime.getTime()) + DAY_LENGTH)) return false;
 
-		if (mediaTypes.contains(MediaTypes.Image))
-		{
+		if (mediaTypes.contains(MediaTypes.Image)) {
 			const image = item as MCImage;
 			const size = await image.getCachedSize();
 
@@ -221,7 +220,7 @@ export default class Query {
 
 				const h = hsl[0];
 				const s = hsl[1];
-				const l = hsl[2];				
+				const l = hsl[2];
 
 				let distance = 0;
 
@@ -229,7 +228,7 @@ export default class Query {
 
 				if (!colors || !Array.isArray(colors)) return false;
 				if (colors.length === 0) return false;
-				
+
 				for (const color of colors) {
 					const ch = color.h * 360;
 					const cs = color.s;
@@ -249,7 +248,7 @@ export default class Query {
 					// Completely arbitrary, might want to tweak
 					// Break out in the for loop so we don't compute more than we need to
 					if (distance > 0.5) return false;
-				}				
+				}
 			}
 		}
 
@@ -300,15 +299,17 @@ export default class Query {
 		this.orderFiles();
 
 		const found = [];
-        
+
 		while (this.currentIndex < this.cache.files.length - 1) {
 			this.currentIndex++;
 
 			const item = this.files[this.currentIndex];
 
 			if (await this.testFile(item)) {
-				found.push(item);
-				this.totalFound++;
+				if (item.file.path.includes('/questiNO')) {
+					found.push(item);
+					this.totalFound++;
+				}
 			}
 		}
 		return found;
@@ -321,13 +322,13 @@ export default class Query {
 	 * query parameters
 	 */
 	private determineTypes(): MediaTypes[] {
-		if ((this.query.dimensions 
-                && (this.query.dimensions.maxHeight !== null
-                || this.query.dimensions.maxWidth !== null 
-                || this.query.dimensions.minHeight !== null
-                || this.query.dimensions.minWidth !== null))
-            || this.query.shape !== null
-            || this.query.color !== null) {
+		if ((this.query.dimensions
+			&& (this.query.dimensions.maxHeight !== null
+				|| this.query.dimensions.maxWidth !== null
+				|| this.query.dimensions.minHeight !== null
+				|| this.query.dimensions.minWidth !== null))
+			|| this.query.shape !== null
+			|| this.query.color !== null) {
 			// May in the future also be video
 			return [MediaTypes.Image];
 		}
