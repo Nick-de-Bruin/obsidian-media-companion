@@ -306,10 +306,8 @@ export default class Query {
 			const item = this.files[this.currentIndex];
 
 			if (await this.testFile(item)) {
-				if (item.file.path.includes('/questiNO')) {
-					found.push(item);
-					this.totalFound++;
-				}
+				found.push(item);
+				this.totalFound++;
 			}
 		}
 		return found;
