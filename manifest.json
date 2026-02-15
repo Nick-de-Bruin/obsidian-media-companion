@@ -1,8 +1,8 @@
 {
 	"id": "media-companion",
 	"name": "Media Companion",
-	"version": "1.2.0",
-	"minAppVersion": "0.18.0",
+	"version": "1.2.1",
+	"minAppVersion": "1.11.5",
 	"description": "Creates a searchable gallery and sidecar files for attachments such as images and videos. The sidecar files allow you to add notes and tags to your media files.",
 	"author": "Nick de Bruin",
 	"authorUrl": "https://nickdebruin.me",
