@@ -49,7 +49,7 @@ export default class MutationHandler extends EventTarget {
 		const f = this.cache.getFile(mediaPath);
         
 		if (f) {
-			f.update().then(() => {});
+			void f.update();
 			if (isMarkdown) {
 				this.cache.sidecarUpdated(f);
 				this.dispatchEvent(new CustomEvent("sidecar-edited", { detail: f }));
@@ -90,7 +90,7 @@ export default class MutationHandler extends EventTarget {
 		// Get sidecar file and remove it
 		const sidecar = this.app.vault.getFileByPath(`${file.path}${Sidecar.EXTENSION}`);
 		if (sidecar) {
-			this.app.fileManager.trashFile(sidecar).then(() => {});
+			void this.app.fileManager.trashFile(sidecar);
 		}
 	}
 
@@ -121,7 +121,7 @@ export default class MutationHandler extends EventTarget {
 		const sidecar = this.app.vault.getFileByPath(`${oldpath}${Sidecar.EXTENSION}`);
 
 		if (sidecar) {
-			this.app.fileManager.renameFile(sidecar, `${file.path}${Sidecar.EXTENSION}`).then(() => {});
+			void this.app.fileManager.renameFile(sidecar, `${file.path}${Sidecar.EXTENSION}`);
 		}
 
 		if (!cacheFile) {
@@ -165,6 +165,7 @@ export default class MutationHandler extends EventTarget {
 			case MediaTypes.Image:
 				mediaFile = await MCImage.create(file, this.app, this.plugin, sidecar);
 				break;
+			case MediaTypes.Video:
 			case MediaTypes.Unknown:
 				mediaFile = await MediaFile.create(file, this.app, this.plugin, sidecar);
 				break;

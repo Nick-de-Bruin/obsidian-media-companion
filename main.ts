@@ -1,14 +1,11 @@
 import { App, debounce, Plugin, PluginSettingTab, Setting, WorkspaceLeaf } from 'obsidian';
-import { GalleryView, VIEW_TYPE_GALLERY } from 'src/views/gallery-view';
 import { DEFAULT_SETTINGS } from 'src/settings'
 import type { MediaCompanionSettings } from 'src/settings';
 import Cache from 'src/cache';
 import MutationHandler from 'src/mutationHandler';
-import pluginStore from 'src/stores/pluginStore';
-import appStore from 'src/stores/appStore';
 import MediaFile from 'src/model/mediaFile';
 import { SidecarView, VIEW_TYPE_SIDECAR } from 'src/views/sidecar-view';
-import activeStore from 'src/stores/activeStore';
+import { WaterfallBasesView, BASES_VIEW_TYPE_WATERFALL, getWaterfallViewOptions } from 'src/views/waterfall-bases-view';
 
 export default class MediaCompanion extends Plugin {
 	settings!: MediaCompanionSettings;
@@ -16,9 +13,6 @@ export default class MediaCompanion extends Plugin {
 	mutationHandler!: MutationHandler;
 
 	async onload() {
-		pluginStore.plugin.set(this);
-		appStore.app.set(this.app);
-
 		await this.loadSettings();
 		
 		this.cache = new Cache(this.app, this);
@@ -27,6 +21,7 @@ export default class MediaCompanion extends Plugin {
 		// Views should be registered AFTER the cache object and mutationHandler
 		// are initialized
 		this.registerViews();
+		this.registerBasesViews();
 
 		this.app.workspace.onLayoutReady(async () => {
 			await this.cache.initialize();
@@ -38,9 +33,6 @@ export default class MediaCompanion extends Plugin {
 			// @ts-ignore - Need to set this manually, unsure if there's a better way
 			this.app.metadataTypeManager.properties[MediaFile.last_updated_tag.toLowerCase()].type = "datetime";
 		});
-
-		this.addRibbonIcon('image', 'Open gallery', (_: MouseEvent) => this.createGallery());
-		this.registerCommands();
 
 		this.addSettingTab(new MediaCompanionSettingTab(this.app, this));
 	}
@@ -55,65 +47,51 @@ export default class MediaCompanion extends Plugin {
 			}
 		}));
 
-		this.registerEvent(this.app.workspace.on("file-open", async (file) => {
-			if (file) {
-				if (this.settings.extensions.contains(file.extension.toLowerCase())) {
-					const mediaFile = this.cache.getFile(file.path);
-					if (mediaFile) {
-						activeStore.file.set(mediaFile);
-					}
-				}
-			}
-		}));
+		// When a media file is opened in a non-sidecar view (e.g. from
+		// the file explorer), redirect it to our SidecarView.
+		let redirecting = false;
+		this.registerEvent(this.app.workspace.on("active-leaf-change", (leaf) => {
+			if (redirecting || !leaf) return;
+			if (leaf.view?.getViewType() === VIEW_TYPE_SIDECAR) return;
+			if (leaf.getRoot() !== this.app.workspace.rootSplit) return;
 
-		activeStore.file.subscribe(async (file) => {
-			if (file) {
-				await this.createSidecar();				
-			}
-		});
+			const filePath = leaf.getViewState()?.state?.file as string | undefined;
+			if (!filePath) return;
+
+			const ext = filePath.split(".").pop()?.toLowerCase() ?? "";
+			if (!this.settings.extensions.includes(ext)) return;
+
+			redirecting = true;
+			leaf.setViewState({
+				type: VIEW_TYPE_SIDECAR,
+				state: { file: filePath },
+			}).finally(() => { redirecting = false; });
+		}));
 	}
 
 	registerViews() {
-		this.registerView(VIEW_TYPE_GALLERY, (leaf) => new GalleryView(leaf, this));
 		this.registerView(VIEW_TYPE_SIDECAR, (leaf) => new SidecarView(leaf));
-	}
 
-	registerCommands() {
-		this.addCommand({
-			id: "open-gallery",
-			name: "Open gallery",
-			callback: () => this.createGallery()
-		});
-	}
-
-	async createSidecar(focus = true) {
-		const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_SIDECAR);
-		let leaf: WorkspaceLeaf | null = null;
-
-		if (leaves.length > 0) {
-			leaf = leaves[0];
-		} else {
-			leaf = this.app.workspace.getRightLeaf(false);
-			await leaf?.setViewState({type: VIEW_TYPE_SIDECAR, active: true });
-		}
-
-		if (leaf && focus) {
-			this.app.workspace.revealLeaf(leaf);
-		}
-	}
-
-	async createGallery() {
-		const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_GALLERY);
-		let leaf: WorkspaceLeaf | null = null;
-
-		if (leaves.length > 0) {
-			leaf = leaves[0];
-		} else {
-			leaf = this.app.workspace.getLeaf(true);
-			await leaf?.setViewState({type: VIEW_TYPE_GALLERY, active: true });
-		}
+		// Register only extensions that Obsidian doesn't already handle.
+		// Built-in extensions (png, jpg, mp4, ...) are already registered and
+		// calling registerExtensions with them would throw.
+		const alreadyRegistered = new Set(Object.keys(this.app.viewRegistry.typeByExtension));
+		const newExts = this.settings.extensions.filter(ext => !alreadyRegistered.has(ext));
 		
-		this.app.workspace.revealLeaf(leaf);
+		if (newExts.length > 0) {
+			this.registerExtensions(newExts, VIEW_TYPE_SIDECAR);
+		}
+	}
+
+	registerBasesViews() {
+		this.registerBasesView(BASES_VIEW_TYPE_WATERFALL, {
+			name: 'Media Waterfall',
+			icon: 'layout-grid',
+			factory: (controller, containerEl) => {
+				return new WaterfallBasesView(controller, containerEl);
+			},
+			options: () => getWaterfallViewOptions(),
+		});
 	}
 
 	async loadSettings() {

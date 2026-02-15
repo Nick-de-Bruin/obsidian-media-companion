@@ -45,7 +45,7 @@ export default class MCImage extends MediaFile {
 	private async readColors(): Promise<{h: number, s: number, l: number, area: number}[]> {
 		const extracted = await extractColors(
 			this.app.vault.getResourcePath(this.file),
-			// 1/4th of defualt pixels to speed up the proces
+			// 1/4th of default pixels to speed up the process
 			{pixels: 16000});
 		const colors = [];
 
@@ -62,7 +62,7 @@ export default class MCImage extends MediaFile {
 	}
 
 	/**
-	 * Finds the cahced colors of the image. If they aren't already registered,
+	 * Finds the cached colors of the image. If they aren't already registered,
 	 * they will be extracted and saved when this is called.
 	 * @returns The cached colors of the image
 	 */

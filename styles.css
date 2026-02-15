@@ -1,0 +1,150 @@
+.mc-sidecar-view {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	overflow-y: auto;
+	overflow-x: hidden;
+}
+
+.mc-media-preview {
+	flex-shrink: 0;
+	max-height: 20em;
+	margin: 1em;
+	display: flex;
+	justify-content: center;
+	overflow: hidden;
+}
+
+.mc-media-element {
+	max-width: 100%;
+	max-height: 20em;
+	object-fit: contain;
+	display: block;
+}
+
+.mc-sidecar-title {
+	font-size: 1.5em;
+	font-weight: bold;
+	width: 100%;
+	padding: 4px 1em;
+	background-color: var(--background-primary);
+	border: none;
+	resize: none;
+	field-sizing: content;
+	box-sizing: border-box;
+	color: var(--text-normal);
+	font-family: var(--font-interface);
+}
+
+.mc-sidecar-title:focus {
+	outline: none;
+	box-shadow: none;
+}
+
+.mc-sidecar-title-invalid,
+.mc-sidecar-title-invalid:focus {
+	border: 1px solid var(--text-error);
+	color: var(--text-error);
+}
+
+.mc-sidecar-title-message {
+	color: var(--text-error);
+	text-align: center;
+	padding: 0;
+	margin: 0;
+	font-size: 0.85em;
+}
+
+.mc-sidecar-editor {
+	flex: 1;
+	overflow-y: auto;
+	padding: 0 1em 1em;
+}
+
+.mc-sidecar-empty {
+	text-align: center;
+	color: var(--text-muted);
+	padding: 2em;
+}
+
+.mc-sidecar-view .metadata-property[data-property-key^="mc-"] {
+	display: none !important;
+}
+
+.bases-view[data-view-type="mc-waterfall"] {
+	padding: 0 !important;
+	margin: 0 !important;
+}
+
+.mc-waterfall-scroll {
+	width: 100%;
+	height: 100%;
+	overflow-y: auto;
+	box-sizing: border-box;
+}
+
+.mc-waterfall-container {
+	position: relative;
+	width: 100%;
+	box-sizing: border-box;
+}
+
+.mc-waterfall-item {
+	position: absolute;
+	overflow: hidden;
+	cursor: pointer;
+	border-radius: 4px;
+	background: var(--background-secondary);
+	transition: top 0.2s ease, left 0.2s ease, width 0.2s ease, height 0.2s ease, box-shadow 0.15s ease;
+}
+
+.mc-waterfall-item:hover {
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.mc-waterfall-media {
+	width: 100%;
+	line-height: 0;
+	display: block;
+}
+
+.mc-waterfall-media img,
+.mc-waterfall-media video {
+	width: 100%;
+	height: auto;
+	display: block;
+	object-fit: contain;
+}
+
+.mc-waterfall-placeholder {
+	width: 100%;
+	background: var(--background-modifier-hover);
+}
+
+.mc-waterfall-name {
+	padding: 4px 8px 0;
+	font-size: 0.85em;
+	color: var(--text-muted);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.mc-waterfall-props {
+	padding: 2px 8px 4px;
+	font-size: 0.75em;
+	color: var(--text-faint);
+}
+
+.mc-waterfall-prop {
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	line-height: 20px;
+}
+
+.mc-waterfall-empty {
+	text-align: center;
+	padding: 2em;
+	color: var(--text-muted);
+}

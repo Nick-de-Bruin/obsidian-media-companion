@@ -1,9 +1,8 @@
-import type { App, TFile } from "obsidian";
+import { Notice, type App, type TFile, type WorkspaceLeaf } from "obsidian";
 import MediaFile from "./model/mediaFile";
 import type MediaCompanion from "main";
 import { getMediaType, MediaTypes } from "./model/types/mediaTypes";
 import MCImage from "./model/types/image/image";
-import type { FileExplorerLeaf } from "obsidian-typings";
 import Sidecar from "./model/sidecar";
 
 /**
@@ -88,6 +87,7 @@ export default class Cache {
 					case MediaTypes.Image:
 						mediaFile = await MCImage.create(file, this.app, this.plugin);
 						break;
+					case MediaTypes.Video:
 					case MediaTypes.Unknown:
 					default:
 						mediaFile = await MediaFile.create(file, this.app, this.plugin);
@@ -134,7 +134,7 @@ export default class Cache {
 
 		files = files.filter(f => this.plugin.settings.extensions.contains(f.extension.toLowerCase()));
 		// This is an awful way to do this; It's O(N^2) - Should improve at some point
-		files = files.filter(f => !this.files.filter(mf => mf.file.path == f.path));
+		files = files.filter(f => !this.files.some(mf => mf.file.path === f.path));
 
 		const notice = new Notice(`Adding ${files.length} new files`, 0);	
 
@@ -147,6 +147,7 @@ export default class Cache {
 				case MediaTypes.Image:
 					mediaFile = await MCImage.create(file, this.app, this.plugin);
 					break;
+				case MediaTypes.Video:
 				case MediaTypes.Unknown:
 				default:
 					mediaFile = await MediaFile.create(file, this.app, this.plugin);
@@ -265,8 +266,8 @@ export default class Cache {
 		if (counter[value]) {
 			counter[value] -= 1;
 
-			if (this.extensions[value] == 0) {
-				delete this.extensions[value];
+			if (counter[value] == 0) {
+				delete counter[value];
 			}
 		}
 	}
@@ -333,7 +334,7 @@ export default class Cache {
 	 * given file explorer leaf.
 	 * @param leaf The file manager leaf to hide things from
 	 */
-	public async hideAll(leaf: FileExplorerLeaf): Promise<void> {
+	public async hideAll(leaf: WorkspaceLeaf): Promise<void> {
 		for (const file of this.files) {
 			file.sidecar.hide(leaf);
 		}

@@ -1,8 +1,5 @@
 import type MediaCompanion from "main";
-import type { App, TFile } from "obsidian";
-import type { FileExplorerLeaf } from "obsidian-typings";
-import pluginStore from "src/stores/pluginStore";
-import { get } from "svelte/store";
+import type { App, TFile, WorkspaceLeaf } from "obsidian";
 
 /** 
  * Represents a sidecar file for a media file
@@ -73,13 +70,14 @@ export default class Sidecar {
 	 * Hides a sidecar from a given file explorer leaf
 	 * @param leaf The file explorer leaf the sidecar should be hidden form
 	 */
-	public hide(leaf: FileExplorerLeaf) {
+	public hide(leaf: WorkspaceLeaf) {
 		if (!leaf) return;
 		// @ts-ignore
 		if (!leaf.view?.fileItems) return;
+		// @ts-ignore
 		const element = leaf.view?.fileItems[this.file.path]?.el;
 		if (!element) return;
-		element.hidden = get(pluginStore.plugin).settings.hideSidecar;
+		element.hidden = this.plugin.settings.hideSidecar;
 	}
 
 	/**

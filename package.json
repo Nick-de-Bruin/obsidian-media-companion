@@ -1,6 +1,6 @@
 {
 	"name": "obsidian-media-gallery",
-	"version": "1.1.5",
+	"version": "1.2.0",
 	"description": "This is a sample plugin for Obsidian (https://obsidian.md)",
 	"main": "main.js",
 	"scripts": {
@@ -12,26 +12,18 @@
 	"author": "",
 	"license": "MIT",
 	"devDependencies": {
-		"@tsconfig/svelte": "^5.0.4",
-		"@types/imagesloaded": "^4.1.6",
-		"@types/masonry-layout": "^4.2.8",
 		"@types/node": "^16.11.6",
 		"@typescript-eslint/eslint-plugin": "5.29.0",
 		"@typescript-eslint/parser": "5.29.0",
 		"builtin-modules": "3.3.0",
 		"esbuild": "0.25.0",
-		"esbuild-svelte": "^0.8.2",
 		"eslint-plugin-editorconfig": "^4.0.3",
 		"obsidian": "latest",
 		"obsidian-typings": "^2.3.4",
-		"svelte": "^4.2.15",
-		"svelte-preprocess": "^5.1.4",
 		"tslib": "2.4.0",
 		"typescript": "^5.4.5"
 	},
 	"dependencies": {
-		"extract-colors": "^4.0.4",
-		"imagesloaded": "^5.0.0",
-		"masonry-layout": "^4.2.2"
+		"extract-colors": "^4.0.4"
 	}
 }

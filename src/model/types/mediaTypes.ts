@@ -3,16 +3,17 @@
  */
 export enum MediaTypes {
 	Image = "image",
+	Video = "video",
 	Unknown = "unknown",
 }
 
 /**
  * Finds the media type of a file based on its extension
- * @param extention The extension of the file
+ * @param extension The extension of the file
  * @returns The media type of the file
  */
-export function getMediaType(extention: string): MediaTypes {
-	switch (extention) {
+export function getMediaType(extension: string): MediaTypes {
+	switch (extension.toLowerCase()) {
 		case "png":
 		case "jpg":
 		case "jpeg":
@@ -21,6 +22,11 @@ export function getMediaType(extention: string): MediaTypes {
 		case "bmp":
 		case "gif":
 			return MediaTypes.Image;
+		case "mp4":
+		case "webm":
+		case "ogv":
+		case "mov":
+			return MediaTypes.Video;
 		default:
 			return MediaTypes.Unknown;
 	}

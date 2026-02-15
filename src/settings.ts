@@ -14,6 +14,10 @@ export const DEFAULT_SETTINGS: MediaCompanionSettings = {
 		'avif',
 		'webp',
 		'gif',
+		'mp4',
+		'webm',
+		'ogv',
+		'mov',
 	],
 	sidecarTemplate: "",
 }

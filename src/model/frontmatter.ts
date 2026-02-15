@@ -4,6 +4,7 @@ export const reservedImageTags: string[] = ["MC-size", "MC-colors"];
 
 export const reservedFrontMatterTags: string[] = [...new Set([
 	...reservedImageTags,
+	"MC-last-updated",
 ])];
 
 // The frontmatter tag used by obsidian to store tags
