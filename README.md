@@ -15,9 +15,7 @@ Search through your files based on folders, tags, or file types.
 
 ![](assets/gallery_and_sidebar.png)
 
-More complex searching can also be done, like searching by color (**without** use of AI!)
-
-<iframe width="560" height="315" src="https://www.youtube.com/embed/RBByEOAPmYc" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+More complex searching can also be done, like searching by color (**without** use of AI!). You can see the plugin in action [here.](https://www.youtube.com/watch?v=RBByEOAPmYc)
 
 *Art shown in the images and video is from [this dataset of Van Gogh paintings](https://www.kaggle.com/datasets/ipythonx/van-gogh-paintings)*
 
