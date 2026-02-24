@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Save to Obsidian</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div id="save-view" class="view" style="display:none">
+    <header>
+      <div class="header-left">
+        <h1>Save to Obsidian</h1>
+      </div>
+      <div class="header-right">
+        <span id="vault-name"></span>
+        <button id="settings-btn" class="icon-btn" title="Settings">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-settings-icon lucide-settings"><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915"/><circle cx="12" cy="12" r="3"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <div class="preview-container" id="preview-container">
+      <div class="preview-loading" id="preview-loading">Loading preview…</div>
+      <img id="image-preview" alt="Image preview">
+    </div>
+
+    <div class="form-group">
+      <label for="filename-input">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-file-icon lucide-file"><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"/><path d="M14 2v5a1 1 0 0 0 1 1h5"/></svg>
+        Filename
+      </label>
+      <input type="text" id="filename-input" placeholder="image.png" spellcheck="false" autocomplete="off">
+    </div>
+
+    <div class="form-group">
+      <label for="folder-input">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-folder-icon lucide-folder"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>
+        Folder
+      </label>
+      <div class="autocomplete-wrapper" id="folder-wrapper">
+        <input type="text" id="folder-input" placeholder="/ (vault root)" spellcheck="false" autocomplete="off" role="combobox" aria-expanded="false" aria-autocomplete="list">
+        <div class="autocomplete-dropdown" id="folder-dropdown" role="listbox"></div>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-tag-icon lucide-tag"><path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r=".5" fill="currentColor"/></svg>
+        Tags
+      </label>
+      <div class="tag-field" id="tag-field">
+        <div id="tag-container"></div>
+        <input type="text" id="tag-input" placeholder="Add tag…" spellcheck="false" autocomplete="off" role="combobox" aria-expanded="false" aria-autocomplete="list">
+      </div>
+      <div class="autocomplete-dropdown tag-dropdown" id="tag-dropdown" role="listbox"></div>
+    </div>
+
+    <div class="source-info" id="source-info"></div>
+
+    <button id="save-btn" class="primary-btn">
+      <span class="btn-label">Save to Obsidian</span>
+      <kbd class="btn-shortcut">Ctrl+Enter</kbd>
+    </button>
+    <div id="status" class="status"></div>
+  </div>
+
+  <div id="settings-view" class="view" style="display:none">
+    <header>
+      <div class="header-left">
+        <button id="back-btn" class="icon-btn" title="Back">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-move-left-icon lucide-move-left"><path d="M6 8L2 12L6 16"/><path d="M2 12H22"/></svg>
+        </button>
+        <h1>Settings</h1>
+      </div>
+    </header>
+
+    <div class="settings-section">
+      <div class="form-group">
+        <label for="host-input">Host</label>
+        <input type="text" id="host-input" value="http://127.0.0.1" spellcheck="false">
+      </div>
+
+      <div class="form-group">
+        <label for="port-input">Port</label>
+        <input type="number" id="port-input" value="27124" min="1" max="65535">
+      </div>
+
+      <div class="form-group">
+        <label for="api-key-input">API Key <span class="label-hint">(optional)</span></label>
+        <input type="password" id="api-key-input" placeholder="Leave empty for no auth">
+      </div>
+
+      <button id="test-connection" class="secondary-btn">Test Connection</button>
+      <div id="connection-status" class="status"></div>
+    </div>
+
+    <button id="save-settings" class="primary-btn">
+      <span class="btn-label">Save Settings</span>
+    </button>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

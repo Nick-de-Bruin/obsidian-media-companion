@@ -1,4 +1,4 @@
-import { App, debounce, Plugin, PluginSettingTab, Setting, WorkspaceLeaf } from 'obsidian';
+import { App, debounce, Platform, Plugin, PluginSettingTab, Setting, WorkspaceLeaf } from 'obsidian';
 import { DEFAULT_SETTINGS } from 'src/settings'
 import type { MediaCompanionSettings } from 'src/settings';
 import Cache from 'src/cache';
@@ -6,17 +6,20 @@ import MutationHandler from 'src/mutationHandler';
 import MediaFile from 'src/model/mediaFile';
 import { SidecarView, VIEW_TYPE_SIDECAR } from 'src/views/sidecar-view';
 import { WaterfallBasesView, BASES_VIEW_TYPE_WATERFALL, getWaterfallViewOptions } from 'src/views/waterfall-bases-view';
+import ApiServer from 'src/api/server';
 
 export default class MediaCompanion extends Plugin {
 	settings!: MediaCompanionSettings;
 	cache!: Cache;
 	mutationHandler!: MutationHandler;
+	apiServer!: ApiServer;
 
 	async onload() {
 		await this.loadSettings();
 		
 		this.cache = new Cache(this.app, this);
 		this.mutationHandler = new MutationHandler(this.app, this, this.cache);
+		this.apiServer = new ApiServer(this.app, this, this.cache);
 
 		// Views should be registered AFTER the cache object and mutationHandler
 		// are initialized
@@ -30,11 +33,18 @@ export default class MediaCompanion extends Plugin {
 			// layout is ready to avoid many events being sent off
 			this.registerEvents();
 
+			// Start the local API server (desktop only, opt-in)
+			this.apiServer.start();
+
 			// @ts-ignore - Need to set this manually, unsure if there's a better way
 			this.app.metadataTypeManager.properties[MediaFile.last_updated_tag.toLowerCase()].type = "datetime";
 		});
 
 		this.addSettingTab(new MediaCompanionSettingTab(this.app, this));
+	}
+
+	onunload() {
+		this.apiServer.stop();
 	}
 
 	registerEvents() {
@@ -155,6 +165,52 @@ class MediaCompanionSettingTab extends PluginSettingTab {
 				.setValue(this.plugin.settings.sidecarTemplate)
 				.onChange(async (value) => {
 					this.plugin.settings.sidecarTemplate = value;
+					await this.plugin.saveSettings();
+				}));
+
+		containerEl.createEl('h3', { text: 'Browser Extension API' });
+
+		if (!Platform.isDesktopApp) {
+			containerEl.createEl('p', {
+				text: 'The API server is only available on desktop.',
+				cls: 'setting-item-description',
+			});
+		}
+
+		new Setting(containerEl)
+			.setName('Enable API server')
+			.setDesc('Start a local HTTP server so the browser extension can communicate with this plugin. Desktop only.')
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.apiEnabled)
+				.setDisabled(!Platform.isDesktopApp)
+				.onChange(async (value) => {
+					this.plugin.settings.apiEnabled = value;
+					await this.plugin.saveSettings();
+					this.plugin.apiServer.restart();
+				}));
+
+		new Setting(containerEl)
+			.setName('API port')
+			.setDesc('The port the API server listens on (default 27124). Requires restart.')
+			.addText(text => text
+				.setPlaceholder('27124')
+				.setValue(String(this.plugin.settings.apiPort))
+				.onChange(async (value) => {
+					const port = parseInt(value, 10);
+					if (!isNaN(port) && port > 0 && port < 65536) {
+						this.plugin.settings.apiPort = port;
+						await this.plugin.saveSettings();
+					}
+				}));
+
+		new Setting(containerEl)
+			.setName('API key')
+			.setDesc('Optional Bearer token for authentication. Leave empty to allow unauthenticated local access.')
+			.addText(text => text
+				.setPlaceholder('(no key)')
+				.setValue(this.plugin.settings.apiKey)
+				.onChange(async (value) => {
+					this.plugin.settings.apiKey = value.trim();
 					await this.plugin.saveSettings();
 				}));
 	}
