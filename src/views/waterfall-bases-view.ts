@@ -5,10 +5,11 @@ import { getShape } from "../model/types/shape";
 import { hexToRgb, rgbToHsl, isColorWithinThreshold } from "../util/color";
 import { VIEW_TYPE_SIDECAR } from "./sidecar-view";
 
+import type { MediaCompanionSettings } from "../settings";
+
 export const BASES_VIEW_TYPE_WATERFALL = "mc-waterfall";
 
 const LABEL_HEIGHT = 24;
-const PROP_LINE_HEIGHT = 20;
 const BUFFER_PX = 800;
 const PADDING = 8;
 
@@ -26,6 +27,8 @@ interface LayoutItem {
 
 	itemHeight: number;
 	measured: boolean;
+	propsMeasured: boolean;
+	propsHeight: number;
 	el: HTMLElement | null;
 }
 
@@ -53,14 +56,21 @@ export class WaterfallBasesView extends BasesView implements HoverParent {
 	private offsetX = 0;
 	private rafId: number | null = null;
 
+	private hoverTimer: ReturnType<typeof setTimeout> | null = null;
+	private fullscreenOverlay: HTMLElement | null = null;
+	private fullscreenItem: LayoutItem | null = null;
+	private settingsChangedRef: (() => void) | null = null;
+	private getPluginSettings: () => MediaCompanionSettings;
+
 	private lastDataFingerprint = "";
 	private lastShowFilename = true;
 	private lastShowProperties = false;
 	private visibleProperties: BasesPropertyId[] = [];
 	private lastPropsFingerprint = "";
 
-	constructor(controller: QueryController, parentEl: HTMLElement) {
+	constructor(controller: QueryController, parentEl: HTMLElement, getPluginSettings: () => MediaCompanionSettings) {
 		super(controller);
+		this.getPluginSettings = getPluginSettings;
 
 		this.scrollEl = parentEl.createDiv({ cls: "mc-waterfall-scroll" });
 		this.containerEl = this.scrollEl.createDiv({ cls: "mc-waterfall-container" });
@@ -71,6 +81,9 @@ export class WaterfallBasesView extends BasesView implements HoverParent {
 			this.relayoutInPlace();
 		});
 		this.resizeObserver.observe(this.scrollEl);
+
+		this.settingsChangedRef = () => this.refreshVisibleItems();
+		this.app.workspace.on("mc:settings-changed" as any, this.settingsChangedRef);
 	}
 
 	private scheduleSync(): void {
@@ -147,36 +160,39 @@ export class WaterfallBasesView extends BasesView implements HoverParent {
 			const propsListChanged = newPropsFingerprint !== this.lastPropsFingerprint;
 
 			if (propsToggled || (newShowProperties && propsListChanged)) {
-				const oldCount = this.lastShowProperties
-					? this.lastPropsFingerprint.split(",").filter(Boolean).length : 0;
-				const newCount = newShowProperties ? this.visibleProperties.length : 0;
-				const oldPropsH = oldCount > 0 ? oldCount * PROP_LINE_HEIGHT + 6 : 0;
-				const newPropsH = newCount > 0 ? newCount * PROP_LINE_HEIGHT + 6 : 0;
-				const delta = newPropsH - oldPropsH;
-
-				if (Math.abs(delta) > 0) {
-					for (const item of this.layoutItems) {
-						item.itemHeight += delta;
-					}
-				}
-
-				// Re-render props DOM on mounted items
+				// Reset props measurement and re-render on mounted items.
 				for (const item of this.layoutItems) {
+					// Subtract old props height from the item before resetting
+					if (item.propsHeight > 0) {
+						item.itemHeight -= item.propsHeight;
+					}
+					item.propsMeasured = false;
+					item.propsHeight = 0;
+
 					if (!item.el) continue;
 					
 					const existing = item.el.querySelector(".mc-waterfall-props");
-					
 					if (existing) existing.remove();
+
+					if (newShowProperties && this.visibleProperties.length > 0) {
+						if (item.entry) this.renderProperties(item.el, item.entry);
+					}
+				}
+
+				// Recompute positions with the props height stripped, then
+				// measure newly rendered props and grow items to fit.
+				this.relayoutInPlace(true, true);
+
 				if (newShowProperties && this.visibleProperties.length > 0) {
-					if (item.entry) this.renderProperties(item.el, item.entry);
+					this.measureMountedProps();
 				}
-				}
+			} else {
+				this.relayoutInPlace(true, true);
 			}
 			
 			this.lastShowProperties = newShowProperties;
 			this.lastPropsFingerprint = newPropsFingerprint;
 
-			this.relayoutInPlace(true);
 			return;
 		}
 
@@ -197,6 +213,7 @@ export class WaterfallBasesView extends BasesView implements HoverParent {
 		this.layoutItems = [];
 
 		const seenMediaPaths = new Set<string>();
+		const itemByMediaPath = new Map<string, LayoutItem>();
 		const foldersInResult = new Set<string>();
 		let deduplicatedCount = 0;
 
@@ -210,6 +227,14 @@ export class WaterfallBasesView extends BasesView implements HoverParent {
 				if (mediaFile.parent) foldersInResult.add(mediaFile.parent.path);
 
 				if (seenMediaPaths.has(mediaFile.path)) {
+					// Prefer the sidecar-backed entry so properties are available
+					if (entry.file.path.endsWith(Sidecar.EXTENSION)) {
+						const existing = itemByMediaPath.get(mediaFile.path);
+						if (existing) {
+							existing.sidecarFile = sidecarFile;
+							existing.entry = entry;
+						}
+					}
 					deduplicatedCount++;
 					continue;
 				}
@@ -228,13 +253,15 @@ export class WaterfallBasesView extends BasesView implements HoverParent {
 					if (!isColorWithinThreshold(targetHsl[0], targetHsl[1], targetHsl[2], meta.colors, colorThreshold / 100)) continue;
 				}
 
-				this.layoutItems.push({
+				const item: LayoutItem = {
 					mediaFile, sidecarFile, entry,
 					metaWidth: meta.width, metaHeight: meta.height,
 					colors: meta.colors,
 					col: 0, x: 0, y: 0, itemHeight: 0,
-					measured: false, el: null,
-				});
+					measured: false, propsMeasured: false, propsHeight: 0, el: null,
+				};
+				this.layoutItems.push(item);
+				itemByMediaPath.set(mediaFile.path, item);
 			}
 		}
 
@@ -286,7 +313,7 @@ export class WaterfallBasesView extends BasesView implements HoverParent {
 						metaWidth: meta.width, metaHeight: meta.height,
 						colors: meta.colors,
 						col: 0, x: 0, y: 0, itemHeight: 0,
-						measured: false, el: null,
+						measured: false, propsMeasured: false, propsHeight: 0, el: null,
 					});
 					remaining--;
 				}
@@ -311,9 +338,6 @@ export class WaterfallBasesView extends BasesView implements HoverParent {
 	private get footerHeight(): number {
 		let h = 0;
 		if (this.showFilename) h += LABEL_HEIGHT;
-		if (this.showProperties && this.visibleProperties.length > 0) {
-			h += this.visibleProperties.length * PROP_LINE_HEIGHT + 6;
-		}
 		return h;
 	}
 
@@ -340,7 +364,7 @@ export class WaterfallBasesView extends BasesView implements HoverParent {
 				const mediaH = item.metaWidth > 0 && item.metaHeight > 0
 					? (this.actualColWidth / item.metaWidth) * item.metaHeight
 					: this.actualColWidth; // square fallback
-				item.itemHeight = mediaH + this.footerHeight;
+				item.itemHeight = mediaH + this.footerHeight + item.propsHeight;
 			}
 			this.columnHeights[col] += item.itemHeight + this.gap;
 		}
@@ -356,7 +380,7 @@ export class WaterfallBasesView extends BasesView implements HoverParent {
 		return min;
 	}
 
-	private relayoutInPlace(force = false): void {
+	private relayoutInPlace(force = false, animate = false): void {
 		if (this.layoutItems.length === 0) return;
 
 		const oldColWidth = this.actualColWidth;
@@ -366,11 +390,17 @@ export class WaterfallBasesView extends BasesView implements HoverParent {
 
 		if (!force && newNumCols === this.numColumns && Math.abs(newColWidth - oldColWidth) < 0.5) return;
 
+		// Suppress animated transitions during resize so the relayout is instant,
+		// but keep them when the caller explicitly requests animation (e.g. toggling props).
+		if (!animate) {
+			this.containerEl.classList.add("mc-no-transition");
+		}
+
 		const scale = newColWidth / (oldColWidth || 1);
 
 		for (const item of this.layoutItems) {
 			if (item.measured) {
-				const footer = this.footerHeight;
+				const footer = this.footerHeight + item.propsHeight;
 				
 				item.itemHeight = (item.itemHeight - footer) * scale + footer;
 			}
@@ -388,6 +418,13 @@ export class WaterfallBasesView extends BasesView implements HoverParent {
 		}
 
 		this.syncDOM();
+
+		// Re-enable transitions after the browser has painted the new positions.
+		if (!animate) {
+			requestAnimationFrame(() => {
+				this.containerEl.classList.remove("mc-no-transition");
+			});
+		}
 	}
 
 	private reflowColumn(changed: LayoutItem, newHeight: number): void {
@@ -413,6 +450,28 @@ export class WaterfallBasesView extends BasesView implements HoverParent {
 		this.containerEl.style.height = `${Math.max(0, ...this.columnHeights)}px`;
 
 		this.syncDOM();
+	}
+
+	/**
+	 * Measure the rendered props height of all mounted items that haven't
+	 * been measured yet, and grow them to fit.  Used after toggling props on
+	 * so the layout adjusts to the new content.
+	 */
+	private measureMountedProps(): void {
+		requestAnimationFrame(() => {
+			for (const item of this.layoutItems) {
+				if (item.propsMeasured || !item.el) continue;
+				const propsEl = item.el.querySelector(".mc-waterfall-props") as HTMLElement | null;
+				const propsH = propsEl ? propsEl.offsetHeight : 0;
+				item.propsMeasured = true;
+				item.propsHeight = propsH;
+				if (propsH > 0) {
+					const newH = item.itemHeight + propsH;
+					item.el.style.height = `${newH}px`;
+					this.reflowColumn(item, newH);
+				}
+			}
+		});
 	}
 
 	private syncDOM(): void {
@@ -458,12 +517,60 @@ export class WaterfallBasesView extends BasesView implements HoverParent {
 
 		this.loadMediaContent(item, el, mc);
 
+		// Read fullscreen settings fresh from the plugin each time an item is mounted
+		// so that changes in plugin settings take effect without a full re-render.
+		const { fullscreenMode: fsMode, fullscreenHoverDelay: fsDelay } = this.getPluginSettings();
+
+		if (fsMode !== "off") {
+			const btn = mc.createDiv({ cls: "mc-waterfall-fullscreen-btn" });
+			btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" x2="16.65" y1="21" y2="16.65"/><line x1="11" x2="11" y1="8" y2="14"/><line x1="8" x2="14" y1="11" y2="11"/></svg>';
+
+			if (fsMode === "hover") {
+				btn.addEventListener("mouseenter", () => {
+					this.clearHoverTimer();
+					this.hoverTimer = setTimeout(() => {
+						this.showFullscreen(item);
+					}, fsDelay);
+				});
+				btn.addEventListener("mouseleave", () => {
+					this.clearHoverTimer();
+				});
+			}
+
+			btn.addEventListener("click", (evt) => {
+				evt.stopPropagation();
+				this.showFullscreen(item);
+			});
+		}
+
 		if (this.showFilename) {
 			el.createDiv({ cls: "mc-waterfall-name", text: item.mediaFile.basename });
 		}
 
 		if (this.showProperties && this.visibleProperties.length > 0) {
 			if (item.entry) this.renderProperties(el, item.entry);
+		}
+
+		// The pre-calculated itemHeight covers media + filename only.
+		// Measure the actual rendered props height (which may wrap) and
+		// grow the item to fit.
+		if (!item.propsMeasured && this.showProperties && this.visibleProperties.length > 0) {
+			// Allow overflow so the props are laid out at their natural
+			// height even though the explicit item height is too short.
+			el.style.overflow = "visible";
+			requestAnimationFrame(() => {
+				if (!item.el || item.propsMeasured) return;
+				const propsEl = item.el.querySelector(".mc-waterfall-props") as HTMLElement | null;
+				const propsH = propsEl ? propsEl.offsetHeight : 0;
+				item.propsMeasured = true;
+				item.propsHeight = propsH;
+				item.el.style.overflow = "";
+				if (propsH > 0) {
+					const newH = item.itemHeight + propsH;
+					item.el.style.height = `${newH}px`;
+					this.reflowColumn(item, newH);
+				}
+			});
 		}
 
 		el.setAttribute("draggable", "true");
@@ -527,6 +634,7 @@ export class WaterfallBasesView extends BasesView implements HoverParent {
 				linktext: item.mediaFile.path,
 			});
 		});
+
 	}
 
 	private loadMediaContent(item: LayoutItem, el: HTMLElement, mc: HTMLElement): void {
@@ -543,7 +651,14 @@ export class WaterfallBasesView extends BasesView implements HoverParent {
 			item.measured = true;
 
 			const mediaH = naturalH * (this.actualColWidth / naturalW);
-			const newH = mediaH + this.footerHeight;
+			let newH = mediaH + this.footerHeight;
+
+			// If props were already measured, preserve that extra height.
+			if (item.propsMeasured) {
+				const propsEl = item.el?.querySelector(".mc-waterfall-props") as HTMLElement | null;
+				if (propsEl) newH += propsEl.offsetHeight;
+			}
+
 			this.reflowColumn(item, newH);
 		};
 
@@ -632,11 +747,107 @@ export class WaterfallBasesView extends BasesView implements HoverParent {
 		
 		for (const pid of this.visibleProperties) {
 			const val = entry.getValue(pid);
-			const text = val ? val.toString() : "";
 			const name = this.config.getDisplayName(pid);
-		
-			propsEl.createDiv({ cls: "mc-waterfall-prop", text: `${name}: ${text}` });
+			const propEl = propsEl.createDiv({ cls: "mc-waterfall-prop" });
+
+			const nameSpan = propEl.createSpan({ cls: "mc-waterfall-prop-name" });
+			nameSpan.textContent = `${name}: `;
+
+			const valueSpan = propEl.createSpan({ cls: "mc-waterfall-prop-value" });
+			this.renderPropertyValue(valueSpan, val);
 		}
+	}
+
+	private renderPropertyValue(container: HTMLElement, val: unknown): void {
+		if (val == null || val === "null" || val === "undefined") {
+			container.appendText("-");
+			return;
+		}
+
+		if (Array.isArray(val)) {
+			if (val.length === 0) {
+				container.appendText("-");
+				return;
+			}
+			for (let i = 0; i < val.length; i++) {
+				if (i > 0) container.appendText(", ");
+				this.renderPropertyValue(container, val[i]);
+			}
+			return;
+		}
+
+		// Obsidian link objects have a `path` property
+		if (typeof val === "object" && val !== null && "path" in val) {
+			const linkObj = val as { path: string; display?: string };
+			const a = container.createEl("a", {
+				cls: "mc-prop-link",
+				text: linkObj.display || linkObj.path.split("/").pop()?.replace(/\.[^.]+$/, "") || linkObj.path,
+			});
+			a.addEventListener("click", (evt) => {
+				evt.preventDefault();
+				evt.stopPropagation();
+				this.app.workspace.openLinkText(linkObj.path, "", Keymap.isModEvent(evt));
+			});
+			return;
+		}
+
+		const text = String(val);
+
+		if (text === "" || text === "null" || text === "undefined") {
+			container.appendText("-");
+			return;
+		}
+
+		// Wiki-links: [[Page]] or [[Page|Display]]
+		const wikiLinkRegex = /\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g;
+		if (wikiLinkRegex.test(text)) {
+			wikiLinkRegex.lastIndex = 0;
+			let lastIndex = 0;
+			let match;
+			while ((match = wikiLinkRegex.exec(text)) !== null) {
+				if (match.index > lastIndex) {
+					container.appendText(text.slice(lastIndex, match.index));
+				}
+				const linkPath = match[1].trim();
+				const display = match[2]?.trim() || linkPath.split("/").pop()?.replace(/\.[^.]+$/, "") || linkPath;
+				const a = container.createEl("a", { cls: "mc-prop-link", text: display });
+				a.addEventListener("click", (evt) => {
+					evt.preventDefault();
+					evt.stopPropagation();
+					this.app.workspace.openLinkText(linkPath, "", Keymap.isModEvent(evt));
+				});
+				lastIndex = match.index + match[0].length;
+			}
+			if (lastIndex < text.length) {
+				container.appendText(text.slice(lastIndex));
+			}
+			return;
+		}
+
+		// Tags: strings starting with #
+		if (text.startsWith("#")) {
+			const tag = container.createSpan({ cls: "mc-prop-tag", text });
+			tag.addEventListener("click", (evt) => {
+				evt.preventDefault();
+				evt.stopPropagation();
+				// @ts-ignore – global search for tag
+				this.app.internalPlugins?.getPluginById?.("global-search")?.instance?.openGlobalSearch?.(`tag:${text}`);
+			});
+			return;
+		}
+
+		// URL strings
+		if (text.startsWith("http://") || text.startsWith("https://")) {
+			const a = container.createEl("a", { cls: "mc-prop-link", text });
+			a.addEventListener("click", (evt) => {
+				evt.preventDefault();
+				evt.stopPropagation();
+				window.open(text, "_blank");
+			});
+			return;
+		}
+
+		container.appendText(text);
 	}
 
 	private async copyMediaToClipboard(mediaFile: TFile): Promise<void> {
@@ -733,6 +944,57 @@ export class WaterfallBasesView extends BasesView implements HoverParent {
 		return map[ext.toLowerCase()] || "application/octet-stream";
 	}
 
+	private clearHoverTimer(): void {
+		if (this.hoverTimer !== null) {
+			clearTimeout(this.hoverTimer);
+			this.hoverTimer = null;
+		}
+	}
+
+	private showFullscreen(item: LayoutItem): void {
+		if (this.fullscreenOverlay) this.dismissFullscreen();
+
+		const overlay = document.body.createDiv({ cls: "mc-waterfall-fullscreen" });
+		this.fullscreenOverlay = overlay;
+		this.fullscreenItem = item;
+
+		const resourcePath = this.app.vault.getResourcePath(item.mediaFile);
+		const mediaType = getMediaType(item.mediaFile.extension);
+
+		if (mediaType === MediaTypes.Video) {
+			const video = overlay.createEl("video", {
+				cls: "mc-waterfall-fullscreen-media",
+				attr: { src: resourcePath, autoplay: "", controls: "", muted: "" },
+			});
+			video.play().catch(() => {});
+		} else {
+			overlay.createEl("img", {
+				cls: "mc-waterfall-fullscreen-media",
+				attr: { src: resourcePath, alt: item.mediaFile.basename },
+			});
+		}
+
+		if (this.showFilename) {
+			overlay.createDiv({ cls: "mc-waterfall-fullscreen-label", text: item.mediaFile.basename });
+		}
+
+		overlay.addEventListener("click", () => this.dismissFullscreen());
+		overlay.addEventListener("mouseleave", () => this.dismissFullscreen());
+
+		const onKey = (e: KeyboardEvent) => {
+			if (e.key === "Escape") this.dismissFullscreen();
+		};
+		document.addEventListener("keydown", onKey, { once: true });
+	}
+
+	private dismissFullscreen(): void {
+		if (this.fullscreenOverlay) {
+			this.fullscreenOverlay.remove();
+			this.fullscreenOverlay = null;
+			this.fullscreenItem = null;
+		}
+	}
+
 	private async openInSidebar(mediaFile: TFile): Promise<void> {
 		const { workspace } = this.app;
 		let leaf: WorkspaceLeaf | null = null;
@@ -757,9 +1019,28 @@ export class WaterfallBasesView extends BasesView implements HoverParent {
 		workspace.revealLeaf(leaf);
 	}
 
+	/**
+	 * Unmount and re-mount all currently visible items so they pick up
+	 * the latest plugin settings (e.g. fullscreen mode changes).
+	 */
+	private refreshVisibleItems(): void {
+		for (const item of this.layoutItems) {
+			if (item.el) {
+				item.el.remove();
+				item.el = null;
+			}
+		}
+		this.syncDOM();
+	}
+
 	onunload(): void {
 		if (this.rafId !== null) cancelAnimationFrame(this.rafId);
+		this.clearHoverTimer();
+		this.dismissFullscreen();
 		this.resizeObserver.disconnect();
+		if (this.settingsChangedRef) {
+			this.app.workspace.off("mc:settings-changed" as any, this.settingsChangedRef);
+		}
 		this.clearDOM();
 	}
 }

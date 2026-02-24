@@ -6,6 +6,9 @@ export interface MediaCompanionSettings {
 	apiEnabled: boolean;
 	apiPort: number;
 	apiKey: string;
+
+	fullscreenMode: "off" | "hover" | "click";
+	fullscreenHoverDelay: number;
 }
 
 export const DEFAULT_SETTINGS: MediaCompanionSettings = {
@@ -28,4 +31,7 @@ export const DEFAULT_SETTINGS: MediaCompanionSettings = {
 	apiEnabled: false,
 	apiPort: 27124,
 	apiKey: "",
+
+	fullscreenMode: "hover",
+	fullscreenHoverDelay: 1000,
 }

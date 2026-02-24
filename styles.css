@@ -31,6 +31,9 @@
 	border: none;
 	resize: none;
 	field-sizing: content;
+	min-height: 2em;
+	overflow: hidden;
+	flex-shrink: 0;
 	box-sizing: border-box;
 	color: var(--text-normal);
 	font-family: var(--font-interface);
@@ -56,8 +59,8 @@
 }
 
 .mc-sidecar-editor {
-	flex: 1;
-	overflow-y: auto;
+	flex-shrink: 0;
+	min-height: 300px;
 	padding: 0 1em 1em;
 }
 
@@ -98,14 +101,48 @@
 	transition: top 0.2s ease, left 0.2s ease, width 0.2s ease, height 0.2s ease, box-shadow 0.15s ease;
 }
 
+.mc-no-transition .mc-waterfall-item {
+	transition: none !important;
+}
+
 .mc-waterfall-item:hover {
 	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
 .mc-waterfall-media {
+	position: relative;
 	width: 100%;
 	line-height: 0;
 	display: block;
+}
+
+.mc-waterfall-fullscreen-btn {
+	position: absolute;
+	bottom: 0;
+	right: 0;
+	width: 24px;
+	height: 24px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: 4px 0 0 0;
+	background: rgba(0, 0, 0, 0.55);
+	color: rgba(255, 255, 255, 0.85);
+	cursor: pointer;
+	opacity: 0;
+	transition: opacity 0.15s ease, background 0.15s ease;
+	pointer-events: none;
+	z-index: 2;
+	line-height: 0;
+}
+
+.mc-waterfall-item:hover .mc-waterfall-fullscreen-btn {
+	opacity: 1;
+	pointer-events: auto;
+}
+
+.mc-waterfall-fullscreen-btn:hover {
+	background: rgba(0, 0, 0, 0.75);
 }
 
 .mc-waterfall-media img,
@@ -137,14 +174,82 @@
 }
 
 .mc-waterfall-prop {
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
-	line-height: 20px;
+	word-wrap: break-word;
+	overflow-wrap: break-word;
+	line-height: 1.4;
+	padding: 1px 0;
+}
+
+.mc-waterfall-prop-name {
+	color: var(--text-faint);
+}
+
+.mc-waterfall-prop-value {
+	color: var(--text-muted);
+}
+
+.mc-waterfall-prop a.mc-prop-link {
+	color: var(--link-color, var(--text-accent));
+	text-decoration: none;
+	cursor: pointer;
+}
+
+.mc-waterfall-prop a.mc-prop-link:hover {
+	text-decoration: underline;
+}
+
+.mc-waterfall-prop .mc-prop-tag {
+	color: var(--tag-color, var(--text-accent));
+	cursor: pointer;
+}
+
+.mc-waterfall-prop .mc-prop-tag:hover {
+	text-decoration: underline;
 }
 
 .mc-waterfall-empty {
 	text-align: center;
 	padding: 2em;
 	color: var(--text-muted);
+}
+
+/* Fullscreen hover overlay */
+.mc-waterfall-fullscreen {
+	position: fixed;
+	top: 0;
+	left: 0;
+	width: 100vw;
+	height: 100vh;
+	z-index: 9999;
+	background: rgba(0, 0, 0, 0.85);
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	cursor: pointer;
+	animation: mc-fullscreen-fadein 0.15s ease;
+}
+
+@keyframes mc-fullscreen-fadein {
+	from { opacity: 0; }
+	to { opacity: 1; }
+}
+
+.mc-waterfall-fullscreen-media {
+	max-width: 90vw;
+	max-height: 85vh;
+	object-fit: contain;
+	border-radius: 4px;
+	box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
+}
+
+.mc-waterfall-fullscreen-label {
+	margin-top: 12px;
+	color: rgba(255, 255, 255, 0.85);
+	font-size: 1em;
+	text-align: center;
+	max-width: 80vw;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }

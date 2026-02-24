@@ -98,7 +98,7 @@ export default class MediaCompanion extends Plugin {
 			name: 'Media Waterfall',
 			icon: 'layout-grid',
 			factory: (controller, containerEl) => {
-				return new WaterfallBasesView(controller, containerEl);
+				return new WaterfallBasesView(controller, containerEl, () => this.settings);
 			},
 			options: () => getWaterfallViewOptions(),
 		});
@@ -110,6 +110,7 @@ export default class MediaCompanion extends Plugin {
 
 	async saveSettings() {
 		await this.saveData(this.settings);
+		this.app.workspace.trigger("mc:settings-changed");
 	}
 }
 
@@ -211,6 +212,33 @@ class MediaCompanionSettingTab extends PluginSettingTab {
 				.setValue(this.plugin.settings.apiKey)
 				.onChange(async (value) => {
 					this.plugin.settings.apiKey = value.trim();
+					await this.plugin.saveSettings();
+				}));
+
+		containerEl.createEl('h3', { text: 'Waterfall View' });
+
+		new Setting(containerEl)
+			.setName('Fullscreen preview')
+			.setDesc('How the fullscreen preview is triggered from the waterfall view.')
+			.addDropdown(dropdown => dropdown
+				.addOption('off', 'Off')
+				.addOption('hover', 'Hover')
+				.addOption('click', 'Click')
+				.setValue(this.plugin.settings.fullscreenMode)
+				.onChange(async (value) => {
+					this.plugin.settings.fullscreenMode = value as "off" | "hover" | "click";
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName('Fullscreen hover delay')
+			.setDesc('How long (in ms) to hover over the preview icon before the fullscreen opens. Only applies in hover mode.')
+			.addSlider(slider => slider
+				.setLimits(200, 3000, 100)
+				.setValue(this.plugin.settings.fullscreenHoverDelay)
+				.setDynamicTooltip()
+				.onChange(async (value) => {
+					this.plugin.settings.fullscreenHoverDelay = value;
 					await this.plugin.saveSettings();
 				}));
 	}
