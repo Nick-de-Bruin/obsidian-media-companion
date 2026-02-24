@@ -824,15 +824,29 @@ export class WaterfallBasesView extends BasesView implements HoverParent {
 			return;
 		}
 
-		// Tags: strings starting with #
-		if (text.startsWith("#")) {
-			const tag = container.createSpan({ cls: "mc-prop-tag", text });
-			tag.addEventListener("click", (evt) => {
-				evt.preventDefault();
-				evt.stopPropagation();
-				// @ts-ignore – global search for tag
-				this.app.internalPlugins?.getPluginById?.("global-search")?.instance?.openGlobalSearch?.(`tag:${text}`);
-			});
+		// Tags: strings containing #tag tokens
+		const tagRegex = /#[^\s#,]+/g;
+		if (tagRegex.test(text)) {
+			tagRegex.lastIndex = 0;
+			let lastIndex = 0;
+			let match;
+			while ((match = tagRegex.exec(text)) !== null) {
+				if (match.index > lastIndex) {
+					container.appendText(text.slice(lastIndex, match.index));
+				}
+				const tagText = match[0];
+				const tag = container.createSpan({ cls: "mc-prop-tag", text: tagText });
+				tag.addEventListener("click", (evt) => {
+					evt.preventDefault();
+					evt.stopPropagation();
+					// @ts-ignore – global search for tag
+					this.app.internalPlugins?.getPluginById?.("global-search")?.instance?.openGlobalSearch?.(`tag:${tagText}`);
+				});
+				lastIndex = match.index + match[0].length;
+			}
+			if (lastIndex < text.length) {
+				container.appendText(text.slice(lastIndex));
+			}
 			return;
 		}
 
