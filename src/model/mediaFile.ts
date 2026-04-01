@@ -1,4 +1,4 @@
-import { TFile, type App } from "obsidian";
+import type { TFile, App } from "obsidian";
 import Sidecar from "./sidecar";
 import { getMediaType, type MediaTypes } from "./types/mediaTypes";
 import type MediaCompanion from "main";

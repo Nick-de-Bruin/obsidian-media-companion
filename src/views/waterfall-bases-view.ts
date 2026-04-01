@@ -1,10 +1,9 @@
-import { BasesView, Keymap, Menu, Notice, parsePropertyId, TFolder, type BasesPropertyId, type QueryController, type HoverParent, type HoverPopover, type TFile, type BasesEntry, type WorkspaceLeaf } from "obsidian";
+import { BasesView, Keymap, Menu, Notice, parsePropertyId, TFolder, setIcon, type BasesPropertyId, type QueryController, type HoverParent, type HoverPopover, type TFile, type BasesEntry, type WorkspaceLeaf } from "obsidian";
 import Sidecar from "../model/sidecar";
 import { getMediaType, MediaTypes } from "../model/types/mediaTypes";
 import { getShape } from "../model/types/shape";
 import { hexToRgb, rgbToHsl, isColorWithinThreshold } from "../util/color";
 import { VIEW_TYPE_SIDECAR } from "./sidecar-view";
-
 import type { MediaCompanionSettings } from "../settings";
 
 export const BASES_VIEW_TYPE_WATERFALL = "mc-waterfall";
@@ -523,7 +522,7 @@ export class WaterfallBasesView extends BasesView implements HoverParent {
 
 		if (fsMode !== "off") {
 			const btn = mc.createDiv({ cls: "mc-waterfall-fullscreen-btn" });
-			btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" x2="16.65" y1="21" y2="16.65"/><line x1="11" x2="11" y1="8" y2="14"/><line x1="8" x2="14" y1="11" y2="11"/></svg>';
+			setIcon(btn, "zoom-in");
 
 			if (fsMode === "hover") {
 				btn.addEventListener("mouseenter", () => {
