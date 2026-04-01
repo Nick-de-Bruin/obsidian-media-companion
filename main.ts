@@ -1,4 +1,4 @@
-import { App, debounce, Platform, Plugin, PluginSettingTab, Setting, WorkspaceLeaf } from 'obsidian';
+import { App, debounce, Platform, Plugin, PluginSettingTab, Setting } from 'obsidian';
 import { DEFAULT_SETTINGS } from 'src/settings'
 import type { MediaCompanionSettings } from 'src/settings';
 import Cache from 'src/cache';
@@ -65,16 +65,15 @@ export default class MediaCompanion extends Plugin {
 			if (leaf.view?.getViewType() === VIEW_TYPE_SIDECAR) return;
 			if (leaf.getRoot() !== this.app.workspace.rootSplit) return;
 
-			const filePath = leaf.getViewState()?.state?.file as string | undefined;
-			if (!filePath) return;
+			const file = leaf.workspace.getActiveFile()
+			if (!file) return;
 
-			const ext = filePath.split(".").pop()?.toLowerCase() ?? "";
-			if (!this.settings.extensions.includes(ext)) return;
+			if (!this.settings.extensions.includes(file.extension)) return;
 
 			redirecting = true;
 			leaf.setViewState({
 				type: VIEW_TYPE_SIDECAR,
-				state: { file: filePath },
+				state: { file: file.path },
 			}).finally(() => { redirecting = false; });
 		}));
 	}
