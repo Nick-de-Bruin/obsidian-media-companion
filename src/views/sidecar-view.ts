@@ -2,6 +2,7 @@ import {
 	debounce,
 	FileView,
 	normalizePath,
+	setIcon,
 	TFile,
 	type WorkspaceLeaf,
 } from "obsidian";
@@ -40,6 +41,7 @@ export class SidecarView extends FileView {
 	private sidecarFile: TFile | null = null;
 	private fileContent = "";
 	private fileContentLastEdited = 0;
+	private fullscreenOverlay: HTMLElement | null = null;
 
 	private saveDebounce = debounce(() => this.saveFile(), 500, true);
 	private renameDebounce = debounce(() => this.renameFile(), 1000, true);
@@ -188,6 +190,7 @@ export class SidecarView extends FileView {
 	async onClose(): Promise<void> {
 		this.flushPendingChanges();
 		this.destroyEditor();
+		this.dismissFullscreen();
 	}
 
 	private renderMediaPreview(file: TFile): void {
@@ -199,6 +202,14 @@ export class SidecarView extends FileView {
 			this.mediaContainerEl.createEl("img", {
 				attr: { src: resourcePath, alt: file.basename },
 				cls: "mc-media-element",
+			});
+			// Vanilla-like zoom button (same icon/behaviour as note live-preview overlay)
+			const btn = this.mediaContainerEl.createDiv({ cls: "mc-sidecar-zoom-btn", attr: { "aria-label": "Inzoomen" } });
+			setIcon(btn, "zoom-in");
+			btn.addEventListener("click", (e) => {
+				e.preventDefault();
+				e.stopPropagation();
+				this.showFullscreen(file);
 			});
 		} else if (mediaType === MediaTypes.Video) {
 			this.mediaContainerEl.createEl("video", {
@@ -329,5 +340,29 @@ export class SidecarView extends FileView {
 		});
 		
 		this.renameTitleEl.hidden = true;
+	}
+
+	private showFullscreen(file: TFile): void {
+		if (this.fullscreenOverlay) this.dismissFullscreen();
+		const overlay = document.body.createDiv({ cls: "mc-sidecar-fullscreen" });
+		this.fullscreenOverlay = overlay;
+		const resourcePath = this.app.vault.getResourcePath(file);
+		const mediaType = getMediaType(file.extension);
+		if (mediaType === MediaTypes.Video) {
+			const video = overlay.createEl("video", { cls: "mc-sidecar-fullscreen-media", attr: { src: resourcePath, autoplay: "", controls: "" } });
+			video.play().catch(() => {});
+		} else {
+			overlay.createEl("img", { cls: "mc-sidecar-fullscreen-media", attr: { src: resourcePath, alt: file.basename } });
+		}
+		overlay.addEventListener("click", () => this.dismissFullscreen());
+		const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") this.dismissFullscreen(); };
+		document.addEventListener("keydown", onKey, { once: true });
+	}
+
+	private dismissFullscreen(): void {
+		if (this.fullscreenOverlay) {
+			this.fullscreenOverlay.remove();
+			this.fullscreenOverlay = null;
+		}
 	}
 }
