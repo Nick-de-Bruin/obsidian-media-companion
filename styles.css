@@ -23,10 +23,21 @@
 	display: block;
 }
 
-.mc-sidecar-zoom-btn {
+.mc-sidecar-actions {
 	position: absolute;
 	top: 6px;
 	right: 6px;
+	display: flex;
+	gap: 4px;
+	z-index: 2;
+	opacity: 0;
+	transition: opacity 0.15s ease;
+}
+.mc-media-preview:hover .mc-sidecar-actions {
+	opacity: 1;
+}
+.mc-sidecar-zoom-btn,
+.mc-sidecar-reveal-btn {
 	width: 26px;
 	height: 26px;
 	display: flex;
@@ -36,14 +47,10 @@
 	background: rgba(0, 0, 0, 0.55);
 	color: rgba(255, 255, 255, 0.85);
 	cursor: pointer;
-	opacity: 0;
-	transition: opacity 0.15s ease, background 0.15s ease;
-	z-index: 2;
+	transition: background 0.15s ease;
 }
-.mc-media-preview:hover .mc-sidecar-zoom-btn {
-	opacity: 1;
-}
-.mc-sidecar-zoom-btn:hover {
+.mc-sidecar-zoom-btn:hover,
+.mc-sidecar-reveal-btn:hover {
 	background: rgba(0, 0, 0, 0.75);
 }
 

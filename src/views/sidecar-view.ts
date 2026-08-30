@@ -203,8 +203,16 @@ export class SidecarView extends FileView {
 				attr: { src: resourcePath, alt: file.basename },
 				cls: "mc-media-element",
 			});
-			// Vanilla-like zoom button (same icon/behaviour as note live-preview overlay)
-			const btn = this.mediaContainerEl.createDiv({ cls: "mc-sidecar-zoom-btn", attr: { "aria-label": "Inzoomen" } });
+			// Action toolbar: reveal in file explorer + vanilla-like zoom
+			const actions = this.mediaContainerEl.createDiv({ cls: "mc-sidecar-actions" });
+			const revealBtn = actions.createDiv({ cls: "mc-sidecar-reveal-btn", attr: { "aria-label": "Show in file explorer" } });
+			setIcon(revealBtn, "folder-open");
+			revealBtn.addEventListener("click", (e) => {
+				e.preventDefault();
+				e.stopPropagation();
+				this.revealInFileExplorer(file);
+			});
+			const btn = actions.createDiv({ cls: "mc-sidecar-zoom-btn", attr: { "aria-label": "Zoom in" } });
 			setIcon(btn, "zoom-in");
 			btn.addEventListener("click", (e) => {
 				e.preventDefault();
@@ -340,6 +348,30 @@ export class SidecarView extends FileView {
 		});
 		
 		this.renameTitleEl.hidden = true;
+	}
+
+	private revealInFileExplorer(file: TFile): void {
+		try {
+			const explorers = this.app.workspace.getLeavesOfType("file-explorer");
+			let revealed = false;
+			for (const leaf of explorers) {
+				// @ts-ignore - revealInFolder is an internal FileExplorer API, widely used by plugins
+				const view: any = leaf.view;
+				if (view && typeof view.revealInFolder === "function") {
+					view.revealInFolder(file);
+					revealed = true;
+				}
+				this.app.workspace.revealLeaf(leaf);
+			}
+			if (revealed) return;
+			// Fallback: use the official command which reveals the active file.
+			// Ensure the sidecar leaf is active so getActiveFile() is the media file.
+			this.app.workspace.setActiveLeaf(this.leaf, { focus: false });
+			// @ts-ignore
+			this.app.commands.executeCommandById("file-explorer:reveal-active-file");
+		} catch (e) {
+			console.error("Media Companion: failed to reveal file in explorer", e);
+		}
 	}
 
 	private showFullscreen(file: TFile): void {
