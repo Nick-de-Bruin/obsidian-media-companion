@@ -100,6 +100,8 @@ export default class Sidecar {
 			tags.push(fmTags);
 		}
 
+		// Filter null/non-string (frontmatter can contain null/numbers) and normalize
+		tags = tags.filter((t): t is string => typeof t === 'string' && t.length > 0);
 		// We make it lowercase here and remove dupes;
 		// For search reasons, we're going to ignore case sensitivity
 		tags = tags.map(t => t.toLowerCase());

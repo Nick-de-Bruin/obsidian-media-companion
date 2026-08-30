@@ -13,6 +13,7 @@
 	display: flex;
 	justify-content: center;
 	overflow: hidden;
+	position: relative;
 }
 
 .mc-media-element {
@@ -20,6 +21,59 @@
 	max-height: 20em;
 	object-fit: contain;
 	display: block;
+}
+
+.mc-sidecar-actions {
+	position: absolute;
+	top: 6px;
+	right: 6px;
+	display: flex;
+	gap: 4px;
+	z-index: 2;
+	opacity: 0;
+	transition: opacity 0.15s ease;
+}
+.mc-media-preview:hover .mc-sidecar-actions {
+	opacity: 1;
+}
+.mc-sidecar-zoom-btn,
+.mc-sidecar-reveal-btn {
+	width: 26px;
+	height: 26px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: 4px;
+	background: rgba(0, 0, 0, 0.55);
+	color: rgba(255, 255, 255, 0.85);
+	cursor: pointer;
+	transition: background 0.15s ease;
+}
+.mc-sidecar-zoom-btn:hover,
+.mc-sidecar-reveal-btn:hover {
+	background: rgba(0, 0, 0, 0.75);
+}
+
+.mc-sidecar-fullscreen {
+	position: fixed;
+	top: 0;
+	left: 0;
+	width: 100vw;
+	height: 100vh;
+	z-index: 9999;
+	background: rgba(0, 0, 0, 0.85);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	cursor: pointer;
+	animation: mc-fullscreen-fadein 0.15s ease;
+}
+.mc-sidecar-fullscreen-media {
+	max-width: 90vw;
+	max-height: 90vh;
+	object-fit: contain;
+	border-radius: 4px;
+	box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
 }
 
 .mc-sidecar-title {
@@ -71,6 +125,9 @@
 }
 
 .mc-sidecar-view .metadata-property[data-property-key^="mc-"] {
+	display: none !important;
+}
+.mc-sidecar-view .markdown-embed-link {
 	display: none !important;
 }
 
@@ -252,4 +309,39 @@
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+}
+
+/* Note image overlay → open sidecar in sidebar */
+.mc-note-image-container {
+	position: relative;
+}
+.mc-note-image-toolbar {
+	position: absolute;
+	top: 6px;
+	right: 6px;
+	display: flex;
+	gap: 4px;
+	opacity: 0;
+	transition: opacity 0.15s ease;
+	pointer-events: none;
+	z-index: 2;
+}
+.mc-note-image-container:hover .mc-note-image-toolbar,
+.mc-note-image-toolbar:focus-within {
+	opacity: 1;
+	pointer-events: auto;
+}
+.mc-note-image-btn {
+	width: 26px;
+	height: 26px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: 4px;
+	background: rgba(0, 0, 0, 0.55);
+	color: rgba(255, 255, 255, 0.85);
+	cursor: pointer;
+}
+.mc-note-image-btn:hover {
+	background: rgba(0, 0, 0, 0.75);
 }

@@ -2,6 +2,7 @@ import {
 	debounce,
 	FileView,
 	normalizePath,
+	setIcon,
 	TFile,
 	type WorkspaceLeaf,
 } from "obsidian";
@@ -40,6 +41,7 @@ export class SidecarView extends FileView {
 	private sidecarFile: TFile | null = null;
 	private fileContent = "";
 	private fileContentLastEdited = 0;
+	private fullscreenOverlay: HTMLElement | null = null;
 
 	private saveDebounce = debounce(() => this.saveFile(), 500, true);
 	private renameDebounce = debounce(() => this.renameFile(), 1000, true);
@@ -188,6 +190,7 @@ export class SidecarView extends FileView {
 	async onClose(): Promise<void> {
 		this.flushPendingChanges();
 		this.destroyEditor();
+		this.dismissFullscreen();
 	}
 
 	private renderMediaPreview(file: TFile): void {
@@ -199,6 +202,22 @@ export class SidecarView extends FileView {
 			this.mediaContainerEl.createEl("img", {
 				attr: { src: resourcePath, alt: file.basename },
 				cls: "mc-media-element",
+			});
+			// Action toolbar: reveal in file explorer + vanilla-like zoom
+			const actions = this.mediaContainerEl.createDiv({ cls: "mc-sidecar-actions" });
+			const revealBtn = actions.createDiv({ cls: "mc-sidecar-reveal-btn", attr: { "aria-label": "Show in file explorer" } });
+			setIcon(revealBtn, "folder-open");
+			revealBtn.addEventListener("click", (e) => {
+				e.preventDefault();
+				e.stopPropagation();
+				this.revealInFileExplorer(file);
+			});
+			const btn = actions.createDiv({ cls: "mc-sidecar-zoom-btn", attr: { "aria-label": "Zoom in" } });
+			setIcon(btn, "zoom-in");
+			btn.addEventListener("click", (e) => {
+				e.preventDefault();
+				e.stopPropagation();
+				this.showFullscreen(file);
 			});
 		} else if (mediaType === MediaTypes.Video) {
 			this.mediaContainerEl.createEl("video", {
@@ -329,5 +348,53 @@ export class SidecarView extends FileView {
 		});
 		
 		this.renameTitleEl.hidden = true;
+	}
+
+	private revealInFileExplorer(file: TFile): void {
+		try {
+			const explorers = this.app.workspace.getLeavesOfType("file-explorer");
+			let revealed = false;
+			for (const leaf of explorers) {
+				// @ts-ignore - revealInFolder is an internal FileExplorer API, widely used by plugins
+				const view: any = leaf.view;
+				if (view && typeof view.revealInFolder === "function") {
+					view.revealInFolder(file);
+					revealed = true;
+				}
+				this.app.workspace.revealLeaf(leaf);
+			}
+			if (revealed) return;
+			// Fallback: use the official command which reveals the active file.
+			// Ensure the sidecar leaf is active so getActiveFile() is the media file.
+			this.app.workspace.setActiveLeaf(this.leaf, { focus: false });
+			// @ts-ignore
+			this.app.commands.executeCommandById("file-explorer:reveal-active-file");
+		} catch (e) {
+			console.error("Media Companion: failed to reveal file in explorer", e);
+		}
+	}
+
+	private showFullscreen(file: TFile): void {
+		if (this.fullscreenOverlay) this.dismissFullscreen();
+		const overlay = document.body.createDiv({ cls: "mc-sidecar-fullscreen" });
+		this.fullscreenOverlay = overlay;
+		const resourcePath = this.app.vault.getResourcePath(file);
+		const mediaType = getMediaType(file.extension);
+		if (mediaType === MediaTypes.Video) {
+			const video = overlay.createEl("video", { cls: "mc-sidecar-fullscreen-media", attr: { src: resourcePath, autoplay: "", controls: "" } });
+			video.play().catch(() => {});
+		} else {
+			overlay.createEl("img", { cls: "mc-sidecar-fullscreen-media", attr: { src: resourcePath, alt: file.basename } });
+		}
+		overlay.addEventListener("click", () => this.dismissFullscreen());
+		const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") this.dismissFullscreen(); };
+		document.addEventListener("keydown", onKey, { once: true });
+	}
+
+	private dismissFullscreen(): void {
+		if (this.fullscreenOverlay) {
+			this.fullscreenOverlay.remove();
+			this.fullscreenOverlay = null;
+		}
 	}
 }

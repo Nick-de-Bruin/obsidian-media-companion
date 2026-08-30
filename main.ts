@@ -1,4 +1,4 @@
-import { App, debounce, Platform, Plugin, PluginSettingTab, Setting } from 'obsidian';
+import { App, debounce, Platform, Plugin, PluginSettingTab, Setting, setIcon, TFile, WorkspaceLeaf } from 'obsidian';
 import { DEFAULT_SETTINGS } from 'src/settings'
 import type { MediaCompanionSettings } from 'src/settings';
 import Cache from 'src/cache';
@@ -25,6 +25,7 @@ export default class MediaCompanion extends Plugin {
 		// are initialized
 		this.registerViews();
 		this.registerBasesViews();
+		this.registerNoteImageOverlay();
 
 		this.app.workspace.onLayoutReady(async () => {
 			await this.cache.initialize();
@@ -58,9 +59,10 @@ export default class MediaCompanion extends Plugin {
 		}));
 
 		// When a media file is opened in a non-sidecar view (e.g. from
-		// the file explorer), redirect it to our SidecarView.
+		// the file explorer), open it in the right sidebar instead of
+		// hijacking the current leaf. Mirrors WaterfallBasesView.openInSidebar.
 		let redirecting = false;
-		this.registerEvent(this.app.workspace.on("active-leaf-change", (leaf) => {
+		this.registerEvent(this.app.workspace.on("active-leaf-change", async (leaf) => {
 			if (redirecting || !leaf) return;
 			if (leaf.view?.getViewType() === VIEW_TYPE_SIDECAR) return;
 			if (leaf.getRoot() !== this.app.workspace.rootSplit) return;
@@ -71,11 +73,122 @@ export default class MediaCompanion extends Plugin {
 			if (!this.settings.extensions.includes(file.extension)) return;
 
 			redirecting = true;
-			leaf.setViewState({
-				type: VIEW_TYPE_SIDECAR,
-				state: { file: file.path },
-			}).finally(() => { redirecting = false; });
+			try {
+				await this.openInSidebar(file);
+			} finally {
+				redirecting = false;
+			}
 		}));
+	}
+
+	private async openInSidebar(file: TFile): Promise<void> {
+		const { workspace } = this.app;
+		let leaf: WorkspaceLeaf | null = null;
+
+		for (const l of workspace.getLeavesOfType(VIEW_TYPE_SIDECAR)) {
+			if (l.getRoot() === workspace.rightSplit) {
+				leaf = l;
+				break;
+			}
+		}
+
+		if (!leaf) {
+			leaf = workspace.getRightLeaf(false);
+			if (!leaf) return;
+		}
+
+		await leaf.setViewState({
+			type: VIEW_TYPE_SIDECAR,
+			state: { file: file.path },
+		});
+
+		workspace.revealLeaf(leaf);
+	}
+
+	private registerNoteImageOverlay(): void {
+		const injectForImg = (img: HTMLImageElement, sourcePath: string) => {
+			if ((img as any).dataset.mcOverlay === '1') return;
+			if (img.classList.contains('cm-widgetBuffer') || img.getAttribute('aria-hidden') === 'true') return;
+			// Resolve the media file path: prefer the wrapper's src (wiki link), fall back to alt/src
+			let rawPath: string | null = null;
+			const wrapper = img.closest('.internal-embed') as HTMLElement | null;
+			if (wrapper?.getAttribute('src')) rawPath = wrapper.getAttribute('src');
+			if (!rawPath) rawPath = img.getAttribute('alt') || img.getAttribute('src') || '';
+			// Also check data-src (obsidian sometimes uses it)
+			if (!rawPath) rawPath = img.getAttribute('data-src') || '';
+			if (!rawPath) return;
+			if (rawPath.startsWith('http://') || rawPath.startsWith('https://')) return;
+			if (rawPath.startsWith('app://')) {
+				try {
+					const url = new URL(rawPath);
+					const name = decodeURIComponent(url.pathname.split('/').pop() || '');
+					if (name) rawPath = name;
+					else return;
+				} catch { return; }
+			}
+			const clean = rawPath.split('?')[0].split('#')[0].split('|')[0].trim();
+			if (!clean) return;
+			const decoded = decodeURIComponent(clean);
+			let file: TFile | null = this.app.metadataCache.getFirstLinkpathDest(decoded, sourcePath) as TFile | null;
+			if (!file) {
+				const byPath = this.app.vault.getAbstractFileByPath(decoded);
+				if (byPath instanceof TFile) file = byPath;
+			}
+			if (!file) {
+				const base = decoded.split('/').pop() || decoded;
+				file = this.app.vault.getFiles().find((f) => f.name === base || f.path.endsWith('/' + base)) as TFile || null;
+			}
+			if (!file || !this.settings.extensions.includes(file.extension)) return;
+
+			const container = (wrapper ?? img.parentElement) as HTMLElement | null;
+			if (!container) return;
+			// Prefer native toolbar (.embed-actions) so our button sits alongside zoom/edit
+			const nativeToolbar = container.querySelector('.embed-actions') as HTMLElement | null;
+			if (nativeToolbar) {
+				if (nativeToolbar.querySelector('[data-mc-btn]')) {
+					(img as any).dataset.mcOverlay = '1';
+					return;
+				}
+				const btn = nativeToolbar.createDiv({ cls: 'embed-action', attr: { 'data-mc-btn': '1', 'aria-label': 'Open sidecar in sidebar' } });
+				setIcon(btn, 'panel-right-open');
+				btn.addEventListener('click', (e) => {
+					e.preventDefault();
+					e.stopPropagation();
+					void this.openInSidebar(file!);
+				});
+				(img as any).dataset.mcOverlay = '1';
+				return;
+			}
+			// Fallback: no native toolbar (e.g. some preview contexts) → own hover toolbar
+			container.addClass('mc-note-image-container');
+			if (container.querySelector(':scope > .mc-note-image-toolbar [data-mc-btn]')) return;
+			let toolbar = container.querySelector(':scope > .mc-note-image-toolbar') as HTMLElement | null;
+			if (!toolbar) toolbar = container.createDiv({ cls: 'mc-note-image-toolbar' });
+			if (toolbar.querySelector('[data-mc-btn]')) return;
+			const btn = toolbar.createDiv({ cls: 'mc-note-image-btn', attr: { 'data-mc-btn': '1', 'aria-label': 'Open sidecar in sidebar' } });
+			setIcon(btn, 'panel-right-open');
+			btn.addEventListener('click', (e) => {
+				e.preventDefault();
+				e.stopPropagation();
+				void this.openInSidebar(file!);
+			});
+			(img as any).dataset.mcOverlay = '1';
+		};
+
+		this.registerMarkdownPostProcessor((el, ctx) => {
+			el.querySelectorAll<HTMLImageElement>('img:not(.cm-widgetBuffer)').forEach((img) => injectForImg(img, ctx.sourcePath));
+		});
+
+		// Live Preview / editor: markdown post-processor doesn't run there, observe DOM
+		const observer = new MutationObserver(() => {
+			document.querySelectorAll<HTMLImageElement>('.markdown-source-view img:not(.cm-widgetBuffer), .markdown-preview-view img:not(.cm-widgetBuffer)').forEach((img) => {
+				if ((img as any).dataset.mcOverlay === '1' || img.getAttribute('aria-hidden') === 'true') return;
+				const active = this.app.workspace.getActiveFile()?.path || '';
+				injectForImg(img, active);
+			});
+		});
+		observer.observe(document.body, { childList: true, subtree: true });
+		this.register(() => observer.disconnect());
 	}
 
 	registerViews() {
